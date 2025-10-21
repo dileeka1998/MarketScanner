@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:MarketScanner"
+             xmlns:converters="clr-namespace:MarketScanner.Converters"
+             x:Class="MarketScanner.App">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- Colors MUST be first so all tokens exist -->
+        <ResourceDictionary Source="Theme/Colors.xaml" />
+        <ResourceDictionary Source="Theme/Styles.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+      
+      <!-- Value Converters -->
+      <converters:ChangeToColorConverter x:Key="ChangeToColorConverter" />
+      <converters:StringToBoolConverter x:Key="StringToBoolConverter" />
+      <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
+      <converters:DecimalNullableConverter x:Key="DecimalNullableConverter" />
+      <converters:NullableDecimalConverter x:Key="NullableDecimal" />
+      <converters:EqualityConverter x:Key="EqInt" />
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

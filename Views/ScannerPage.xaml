@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:MarketScanner.Converters"
+             xmlns:utils="clr-namespace:MarketScanner.Utilities"
+             xmlns:beh="clr-namespace:MarketScanner.Behaviors"
+             xmlns:svc="clr-namespace:MarketScanner.Services"
+             xmlns:controls="clr-namespace:MarketScanner.Controls"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="MarketScanner.Views.ScannerPage"
+             Title="Market Scanner"
+             BackgroundColor="{StaticResource BackgroundDark}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:ChangeToColorConverter x:Key="ChangeToColorConverter"/>
+            <converters:StringToBoolConverter x:Key="StringToBoolConverter"/>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:EqualityConverter x:Key="EqInt"/>
+            <converters:DecimalNullableConverter x:Key="DecimalNullableConverter"/>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <RefreshView IsRefreshing="{Binding IsRefreshing}"
+                 Command="{Binding LoadDataCommand}"
+                 BackgroundColor="{StaticResource BackgroundDark}">
+
+        <Grid ColumnDefinitions="*,320"
+              BackgroundColor="{StaticResource BackgroundDark}">
+
+            <!-- Left Panel: Data Table with Horizontal Scroll -->
+            <ScrollView x:Name="TableScroll"
+                        Grid.Column="0"
+                        Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Always"
+                        BackgroundColor="{StaticResource BackgroundDark}"
+                        Margin="0,0,8,0">
+
+                <Grid x:Name="TableRoot"
+                      BackgroundColor="{StaticResource BackgroundDark}"
+                      RowDefinitions="Auto,*">
+
+                    <!-- Table Header -->
+                    <Grid x:Name="HeaderGrid"
+                          Grid.Row="0"
+                          BackgroundColor="{StaticResource SurfaceDark}"
+                          HeightRequest="40">
+
+                        <!-- Symbol Header -->
+                        <Label Grid.Column="0"
+                               Text="Symbol"
+                               Style="{StaticResource HeaderLabel}"
+                               HorizontalOptions="Start">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="0"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- Company Header -->
+                        <Label Grid.Column="1"
+                               Text="Company"
+                               Style="{StaticResource HeaderLabel}"
+                               HorizontalOptions="Start">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="1"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- Change % Header -->
+                        <Label Grid.Column="2"
+                               Text="Change %"
+                               Style="{StaticResource HeaderLabel}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="2"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- Change Header -->
+                        <Label Grid.Column="3"
+                               Text="Change"
+                               Style="{StaticResource HeaderLabel}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="3"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- Last Price Header -->
+                        <Label Grid.Column="4"
+                               Text="Last Price"
+                               Style="{StaticResource HeaderLabel}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="4"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- RV Header -->
+                        <Label Grid.Column="5"
+                               Text="RV"
+                               Style="{StaticResource HeaderLabel}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="5"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- Volume Header -->
+                        <Label Grid.Column="6"
+                               Text="Volume"
+                               Style="{StaticResource HeaderLabel}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="6"/>
+                            </Label.Behaviors>
+                        </Label>
+
+                        <!-- Avg Vol Header -->
+                        <Label Grid.Column="7"
+                               Text="Avg Vol"
+                               Style="{StaticResource HeaderLabel}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer NumberOfTapsRequired="2"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <beh:HeaderAutoSizeBehavior ColumnIndex="7"/>
+                            </Label.Behaviors>
+                        </Label>
+
+
+                        <!-- Resize Grips -->
+                        <BoxView Grid.Column="0"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="0"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="1"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="1"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="2"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="2"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="3"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="3"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="4"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="4"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="5"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="5"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="6"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="6"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                        <BoxView Grid.Column="7"
+                                 Style="{StaticResource HeaderGrip}"
+                                 Margin="-4,0,-4,0"
+                                 ZIndex="10">
+                            <BoxView.Behaviors>
+                                <utils:ColumnResizeBehavior ColumnIndex="7"/>
+                            </BoxView.Behaviors>
+                        </BoxView>
+
+                    </Grid>
+
+                    <!-- Table Rows -->
+                    <CollectionView x:Name="Rows"
+                                    Grid.Row="1"
+                                    ItemsSource="{Binding ScannerItems}"
+                                    BackgroundColor="#1a1a1a"
+                                    SelectionMode="None"
+                                    ItemsUpdatingScrollMode="KeepScrollOffset"
+                                    ItemsLayout="VerticalList">
+
+                        <!-- DataTemplate is set programmatically in code-behind -->
+
+                        <CollectionView.EmptyView>
+                            <StackLayout VerticalOptions="CenterAndExpand"
+                                         HorizontalOptions="CenterAndExpand">
+                                <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                                   IsVisible="{Binding IsLoading}"
+                                                   Color="{StaticResource PrimaryDark}"/>
+                                <Label Text="No data available. Adjust filters or try again."
+                                       IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"
+                                       TextColor="{StaticResource OnSurfaceVariantDark}"
+                                       HorizontalOptions="Center"
+                                       Margin="0,16,0,0"/>
+                                <Label Text="{Binding ErrorMessage}"
+                                       IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
+                                       Style="{StaticResource ErrorLabelStyle}"/>
+                                <Button Text="Retry"
+                                        Command="{Binding LoadDataCommand}"
+                                        IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
+                                        Style="{StaticResource PrimaryButtonStyle}"/>
+                            </StackLayout>
+                        </CollectionView.EmptyView>
+                    </CollectionView>
+                </Grid>
+            </ScrollView>
+
+            <!-- Right Panel: Filters -->
+            <ScrollView Grid.Column="1"
+                        BackgroundColor="{StaticResource SurfaceDark}"
+                        Padding="12">
+
+                <StackLayout Spacing="12">
+
+                    <!-- Exchange Filter -->
+                    <StackLayout>
+                        <Label Text="Exchange"
+                               Style="{StaticResource FilterLabelStyle}"/>
+                        <Picker ItemsSource="{Binding ExchangeOptions}"
+                                SelectedItem="{Binding Exchange, Mode=TwoWay}"
+                                Style="{StaticResource FilterPickerStyle}"/>
+                    </StackLayout>
+
+                    <!-- Price Range Filter -->
+                    <StackLayout>
+                        <Label Text="Price Range"
+                               Style="{StaticResource FilterLabelStyle}"/>
+                        <Grid ColumnDefinitions="*,*,*"
+                              ColumnSpacing="8">
+                            <Entry Grid.Column="0"
+                                   Text="{Binding MinPriceText, Mode=TwoWay, Converter={StaticResource NullableDecimal}}"
+                                   Placeholder="Min"
+                                   Style="{StaticResource FilterEntryStyle}"
+                                   Keyboard="Numeric"
+                                   TextChanged="OnFilterTextChanged"/>
+                            <Label Grid.Column="1"
+                                   Text="to"
+                                   Style="{StaticResource FilterLabelStyle}"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"/>
+                            <Entry Grid.Column="2"
+                                   Text="{Binding MaxPriceText, Mode=TwoWay, Converter={StaticResource NullableDecimal}}"
+                                   Placeholder="Max"
+                                   Style="{StaticResource FilterEntryStyle}"
+                                   Keyboard="Numeric"
+                                   TextChanged="OnFilterTextChanged"/>
+                        </Grid>
+                    </StackLayout>
+
+                    <!-- Volume Filter -->
+                    <StackLayout>
+                        <Label Text="Min Volume"
+                               Style="{StaticResource FilterLabelStyle}"/>
+                        <Entry Text="{Binding VolumeMinText, Mode=TwoWay, Converter={StaticResource NullableDecimal}}"
+                               Placeholder="e.g., 100000"
+                               Style="{StaticResource FilterEntryStyle}"
+                               Keyboard="Numeric"
+                               TextChanged="OnFilterTextChanged"/>
+                    </StackLayout>
+
+                    <!-- Change % Range Filter -->
+                    <StackLayout>
+                        <Label Text="Min Change %"
+                               Style="{StaticResource FilterLabelStyle}"/>
+                        <Entry Text="{Binding MinChangePercentText, Mode=TwoWay, Converter={StaticResource NullableDecimal}}"
+                               Placeholder="e.g., 5"
+                               Style="{StaticResource FilterEntryStyle}"
+                               Keyboard="Numeric"
+                               TextChanged="OnFilterTextChanged"/>
+                    </StackLayout>
+
+                    <!-- Top N Filter -->
+                    <StackLayout>
+                        <Label Text="Top N"
+                               Style="{StaticResource FilterLabelStyle}"/>
+                        <Picker ItemsSource="{Binding TopNOptions}"
+                                SelectedItem="{Binding TopN, Mode=TwoWay}"
+                                Style="{StaticResource FilterPickerStyle}"/>
+                    </StackLayout>
+
+                    <!-- Auto-refresh control -->
+                    <controls:AutoRefreshControl
+                        AutoRefreshEnabled="{Binding AutoRefreshEnabled, Mode=TwoWay}"
+                        RefreshIntervalSeconds="{Binding RefreshIntervalSeconds, Mode=TwoWay}"
+                        Margin="0,16,0,0"/>
+
+                    <!-- Refresh and Reset buttons -->
+                    <Grid RowDefinitions="Auto,Auto"
+                          RowSpacing="10"
+                          Margin="0,16,0,0">
+                        <Button Text="Refresh"
+                                Command="{Binding RefreshCommand}"/>
+                        <Button Grid.Row="1"
+                                Text="Reset Filters"
+                                Style="{StaticResource ResetButtonStyle}"
+                                Command="{Binding ResetFiltersCommand}"/>
+                    </Grid>
+
+                    <!-- Error Message -->
+                    <Label Text="{Binding ErrorMessage}"
+                           IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
+                           Style="{StaticResource ErrorLabelStyle}"/>
+
+
+                </StackLayout>
+            </ScrollView>
+
+        </Grid>
+    </RefreshView>
+
+</ContentPage>

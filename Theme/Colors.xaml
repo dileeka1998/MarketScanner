@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+  <!-- Base palette (keep existing if present; otherwise add) -->
+  <Color x:Key="Surface">#1E1F22</Color>
+  <Color x:Key="SurfaceLow">#2A2C30</Color>
+  <Color x:Key="SurfaceMid">#2F3136</Color>
+  <Color x:Key="SurfaceHigh">#3A3D43</Color>
+  <Color x:Key="SurfaceBorder">#3A3D42</Color>
+  <Color x:Key="SurfaceDark">#1E1F22</Color>
+  <Color x:Key="SurfaceVariantDark">#2A2C30</Color>
+
+  <Color x:Key="Primary">#4E9EFF</Color>
+  <Color x:Key="PrimaryDark">#4E9EFF</Color>
+  <Color x:Key="AccentPrimary">#3B82F6</Color>
+  <Color x:Key="AccentPrimary-Pressed">#316DD0</Color>
+  <Color x:Key="AccentSecondary">#7B61FF</Color>
+  <Color x:Key="Secondary">#7B61FF</Color>
+
+  <Color x:Key="OnSurface">#E6E6E6</Color>
+  <Color x:Key="OnSurfaceDark">#E6E6E6</Color>
+  <Color x:Key="OnSurfaceVariantDark">#B0B0B0</Color>
+  <Color x:Key="TextPrimary">#EDEFF2</Color>
+  <Color x:Key="TextOnAccent">#FFFFFF</Color>
+
+  <!-- Error and border colors -->
+  <Color x:Key="ErrorColor">#FF6B6B</Color>
+  <Color x:Key="BorderDark">#3A3D42</Color>
+
+  <!-- Change indicator colors -->
+  <Color x:Key="GainColor">#4CAF50</Color>        <!-- Green for positive changes -->
+  <Color x:Key="LossColor">#F44336</Color>        <!-- Red for negative changes -->
+  <Color x:Key="NeutralColor">#9E9E9E</Color>     <!-- Gray for zero changes -->
+
+  <!-- Radio button and UI colors -->
+  <Color x:Key="AccentFill">#3B82F6</Color>       <!-- Blue accent for selected state -->
+  <Color x:Key="AccentText">#FFFFFF</Color>       <!-- White text on accent -->
+  <Color x:Key="PanelLow">#26292E</Color>         <!-- Subtle surface for radio container -->
+
+  <!-- 🔧 Legacy aliases (compat layer) -->
+  <Color x:Key="BackgroundDark">#1E1F22</Color>
+  <Color x:Key="Background">#2A2C30</Color>
+  <Color x:Key="BackgroundLow">#2A2C30</Color>
+  <Color x:Key="BackgroundBorder">#3A3D42</Color>
+
+  <Color x:Key="Accent">#4E9EFF</Color>
+  <Color x:Key="ContentColor">#E6E6E6</Color>
+
+</ResourceDictionary>

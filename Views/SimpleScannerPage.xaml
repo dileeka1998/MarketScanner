@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:MarketScanner.Converters"
+             x:Class="MarketScanner.Views.SimpleScannerPage"
+             Title="Simple Scanner"
+             BackgroundColor="#1a1a1a">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:RefreshIntervalToColorConverter x:Key="RefreshIntervalToColorConverter" />
+            <converters:RefreshIntervalToTextColorConverter x:Key="RefreshIntervalToTextColorConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <StackLayout Padding="20" Spacing="20">
+            
+            <Label Text="Market Scanner" 
+                   FontSize="24" 
+                   TextColor="White" 
+                   HorizontalOptions="Center" />
+            
+            <!-- Auto Refresh Control -->
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto"
+                  ColumnSpacing="6"
+                  Margin="0,10,0,0"
+                  HorizontalOptions="Start"
+                  VerticalOptions="Center">
+
+                <!-- Checkbox -->
+                <CheckBox Grid.Column="0"
+                          x:Name="AutoRefreshCheckBox"
+                          WidthRequest="18"
+                          HeightRequest="18"
+                          VerticalOptions="Center"
+                          HorizontalOptions="Start"
+                          Margin="0"/>
+
+                <!-- Label -->
+                <Label Grid.Column="1"
+                       Text="Auto-refresh every"
+                       TextColor="#e0e0e0"
+                       VerticalTextAlignment="Center"
+                       HorizontalOptions="Start"
+                       Margin="2,0,0,0"
+                       LineBreakMode="NoWrap"/>
+
+                <!-- Custom segmented control with 30s / 60s -->
+                <Grid Grid.Column="2" 
+                      HorizontalOptions="Start"
+                      VerticalOptions="Center"
+                      IsEnabled="{Binding Source={x:Reference AutoRefreshCheckBox}, Path=IsChecked}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- 30s Button -->
+                    <Button Grid.Column="0"
+                            x:Name="Button30s"
+                            Text="30s"
+                            FontSize="13"
+                            Padding="16,8"
+                            CornerRadius="4"
+                            HeightRequest="32"
+                            BackgroundColor="#2d2d2d"
+                            TextColor="#e0e0e0"
+                            Clicked="OnIntervalButtonClicked"
+                            BorderWidth="1"
+                            BorderColor="#404040"
+                            Margin="0,0,1,0"/>
+                    
+                    <!-- 60s Button -->
+                    <Button Grid.Column="1"
+                            x:Name="Button60s"
+                            Text="60s"
+                            FontSize="13"
+                            Padding="16,8"
+                            CornerRadius="4"
+                            HeightRequest="32"
+                            BackgroundColor="#4a9eff"
+                            TextColor="#ffffff"
+                            Clicked="OnIntervalButtonClicked"
+                            BorderWidth="1"
+                            BorderColor="#404040"
+                            Margin="1,0,0,0"/>
+                </Grid>
+
+                <!-- Static unit label -->
+                <Label Grid.Column="3"
+                       Text="sec"
+                       TextColor="#e0e0e0"
+                       VerticalTextAlignment="Center"
+                       HorizontalOptions="Start"
+                       Margin="2,0,0,0"/>
+            </Grid>
+
+            <!-- Test Data -->
+            <Label Text="Selected Interval: 60 seconds" 
+                   x:Name="IntervalLabel"
+                   TextColor="White" 
+                   FontSize="16" />
+            
+            <Label Text="Auto-refresh: OFF" 
+                   x:Name="StatusLabel"
+                   TextColor="White" 
+                   FontSize="16" />
+
+        </StackLayout>
+    </ScrollView>
+
+</ContentPage>

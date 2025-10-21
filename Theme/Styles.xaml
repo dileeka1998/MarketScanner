@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit">
+
+    <!-- Dark Theme Styles -->
+
+    <!-- Page Styles -->
+    <Style TargetType="ContentPage">
+        <Setter Property="BackgroundColor" Value="{StaticResource BackgroundDark}" />
+    </Style>
+
+    <!-- Grid Styles -->
+    <Style x:Key="MainGridStyle" TargetType="Grid">
+        <Setter Property="BackgroundColor" Value="{StaticResource BackgroundDark}" />
+    </Style>
+
+    <Style x:Key="FilterPanelStyle" TargetType="Grid">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceDark}" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,0" />
+    </Style>
+
+    <!-- Label Styles -->
+    <Style x:Key="HeaderLabelStyle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <Style x:Key="FilterLabelStyle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style x:Key="TableHeaderStyle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <Style x:Key="TableDataStyle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <Style x:Key="DataLabelStyle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <Style x:Key="ErrorLabelStyle" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource ErrorColor}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="Margin" Value="0,16,0,0" />
+    </Style>
+
+    <!-- Picker Styles -->
+    <Style TargetType="Picker">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceVariantDark}" />
+        <Setter Property="TitleColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <Style x:Key="FilterPickerStyle" TargetType="Picker">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceVariantDark}" />
+        <Setter Property="TitleColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <!-- Entry Styles -->
+    <Style TargetType="Entry">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceVariantDark}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="Keyboard" Value="Numeric" />
+    </Style>
+
+    <Style x:Key="FilterEntryStyle" TargetType="Entry">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceVariantDark}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource OnSurfaceVariantDark}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="Keyboard" Value="Numeric" />
+    </Style>
+
+    <!-- CheckBox Styles -->
+    <Style TargetType="CheckBox">
+        <Setter Property="Color" Value="{StaticResource PrimaryDark}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <Style x:Key="FilterCheckBoxStyle" TargetType="CheckBox">
+        <Setter Property="Color" Value="{StaticResource PrimaryDark}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <!-- Base Button Style -->
+    <Style x:Key="ButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource PrimaryDark}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <!-- Button Styles -->
+    <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource ButtonStyle}">
+        <Setter Property="BackgroundColor" Value="{StaticResource PrimaryDark}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceVariantDark}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <Style x:Key="FilterButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource PrimaryDark}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <!-- CollectionView Styles -->
+    <Style x:Key="ScannerTableStyle" TargetType="CollectionView">
+        <Setter Property="BackgroundColor" Value="{StaticResource BackgroundDark}" />
+        <Setter Property="SelectionMode" Value="None" />
+    </Style>
+
+    <!-- Frame Styles -->
+    <Style x:Key="FilterFrameStyle" TargetType="Frame">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceDark}" />
+        <Setter Property="BorderColor" Value="{StaticResource BorderDark}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <!-- ActivityIndicator Style -->
+    <Style TargetType="ActivityIndicator">
+        <Setter Property="Color" Value="{StaticResource PrimaryDark}" />
+    </Style>
+
+        <!-- RefreshView Style -->
+        <Style TargetType="RefreshView">
+            <Setter Property="RefreshColor" Value="{StaticResource PrimaryDark}" />
+        </Style>
+
+
+        <Style x:Key="HeaderLabel" TargetType="Label">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="Padding" Value="6,8" />
+            <Setter Property="VerticalTextAlignment" Value="Center" />
+            <Setter Property="TextColor" Value="{StaticResource OnSurfaceDark}" />
+            <Setter Property="HorizontalOptions" Value="End" />
+        </Style>
+
+        <Style x:Key="CellLabel" TargetType="Label">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariantDark}" />
+            <Setter Property="VerticalOptions" Value="Center" />
+        </Style>
+
+        <Style x:Key="NumericCellLabel" TargetType="Label" BasedOn="{StaticResource CellLabel}">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo" />
+            <Setter Property="HorizontalTextAlignment" Value="End" />
+        </Style>
+
+        <Style x:Key="SymbolLabel" TargetType="Label">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariantDark}" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="HorizontalOptions" Value="Start" />
+            <Setter Property="FontAttributes" Value="Bold" />
+        </Style>
+
+        <Style x:Key="CompanyLabel" TargetType="Label">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariantDark}" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="HorizontalOptions" Value="Start" />
+            <Setter Property="LineBreakMode" Value="TailTruncation" />
+        </Style>
+
+        <!-- Grip Styles -->
+        <Style x:Key="HeaderGrip" TargetType="BoxView">
+            <Setter Property="WidthRequest" Value="8" />
+            <Setter Property="VerticalOptions" Value="Fill" />
+            <Setter Property="HorizontalOptions" Value="End" />
+            <Setter Property="BackgroundColor" Value="{StaticResource BorderDark}" />
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+
+        <!-- Inline Picker Style -->
+        <Style x:Key="InlinePicker" TargetType="Picker">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HeightRequest" Value="34" />
+        </Style>
+        
+        <!-- Inline CheckBox Style -->
+        <Style x:Key="InlineCheckBox" TargetType="CheckBox">
+            <Setter Property="WidthRequest" Value="18"/>
+            <Setter Property="HeightRequest" Value="18"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="VerticalOptions" Value="Center"/>
+        </Style>
+
+        <!-- Pill group container -->
+        <Style x:Key="PillGroupContainer" TargetType="Border">
+            <Setter Property="Stroke" Value="#404046"/>
+            <Setter Property="StrokeThickness" Value="1"/>
+            <Setter Property="Background" Value="#2B2B2F"/>
+            <Setter Property="StrokeShape">
+                <Setter.Value>
+                    <RoundRectangle CornerRadius="18"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+
+        <!-- Pill radio items -->
+        <Style x:Key="PillRadio" TargetType="RadioButton">
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="BorderWidth" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="TextColor" Value="#CFCFD4"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalOptions" Value="Fill"/>
+            <Setter Property="VerticalOptions" Value="Center"/>
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <Setter.Value>
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Checked">
+                                <VisualState.Setters>
+                                    <Setter Property="Background" Value="#3A6CF6"/>
+                                    <Setter Property="TextColor" Value="White"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="PointerOver">
+                                <VisualState.Setters>
+                                    <Setter Property="Background" Value="#35353A"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="Opacity" Value="0.7"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary pill button (Border + Label) -->
+        <Style x:Key="PrimaryPillButton" TargetType="Border">
+            <Setter Property="Background" Value="#4D86FF"/>
+            <Setter Property="Stroke" Value="Transparent"/>
+            <Setter Property="StrokeShape">
+                <Setter.Value>
+                    <RoundRectangle CornerRadius="10"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HeightRequest" Value="44"/>
+        </Style>
+
+        <!-- Segmented container (for 30s/60s) -->
+        <Style x:Key="SegmentedContainerFrame" TargetType="Frame">
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="BackgroundColor" Value="{StaticResource SurfaceLow}"/>
+            <Setter Property="BorderColor" Value="{StaticResource SurfaceBorder}"/>
+            <Setter Property="HasShadow" Value="False"/>
+        </Style>
+
+        <!-- Segmented option (RadioButton rendered as a pill) -->
+        <Style x:Key="SegmentedOption" TargetType="RadioButton">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="BackgroundColor" Value="Transparent"/>
+            <Setter Property="TextColor" Value="{StaticResource OnSurface}"/>
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup>
+                        <VisualState x:Name="Checked">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                <Setter Property="TextColor" Value="White"/>
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                <Setter Property="TextColor" Value="{StaticResource OnSurface}"/>
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+        <!-- Reset button: secondary accent, distinct from primary Refresh -->
+        <Style x:Key="ResetButtonStyle" TargetType="Button" BasedOn="{StaticResource ButtonStyle}">
+            <Setter Property="BackgroundColor" Value="{StaticResource AccentSecondary}"/>
+            <Setter Property="TextColor" Value="{StaticResource TextOnAccent}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="HeightRequest" Value="48"/>
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup>
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="{StaticResource AccentSecondary}"/>
+                                <Setter Property="TextColor" Value="{StaticResource TextOnAccent}"/>
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="Pressed">
+                            <VisualState.Setters>
+                                <Setter Property="BackgroundColor" Value="#6B4FCC"/>
+                                <Setter Property="TextColor" Value="{StaticResource TextOnAccent}"/>
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+
+        <!-- Segmented host -->
+        <Style x:Key="SegmentHost" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="{DynamicResource SurfaceMid}" />
+            <Setter Property="Stroke" Value="{DynamicResource SurfaceHigh}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeShape">
+                <Setter.Value>
+                    <RoundRectangle CornerRadius="10" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <!-- Radio-as-chip -->
+        <Style x:Key="ChipRadio" TargetType="RadioButton">
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <Setter.Value>
+                    <VisualStateGroupList>
+                        <VisualStateGroup>
+                            <VisualState x:Name="Checked">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="{DynamicResource AccentPrimary}" />
+                                    <Setter Property="TextColor" Value="White" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Normal" />
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Resources -->
+        <x:Double x:Key="TableSeparatorThickness">0.5</x:Double>
+
+    </ResourceDictionary>

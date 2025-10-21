@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:converters="clr-namespace:MarketScanner.Converters"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+    x:Class="MarketScanner.Controls.AutoRefreshControl"
+    x:Name="Root">
+    
+    <ContentView.Resources>
+        <ResourceDictionary>
+            <converters:EqualityConverter x:Key="EqInt" />
+        </ResourceDictionary>
+    </ContentView.Resources>
+
+    <!-- Two-row Grid: checkbox+label then the radios; on wide screens it still looks inline because radios are right-aligned -->
+    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*" ColumnSpacing="8" RowSpacing="8" Padding="0">
+
+        <!-- Checkbox -->
+        <CheckBox Grid.Row="0" Grid.Column="0"
+                  IsChecked="{Binding AutoRefreshEnabled, Mode=TwoWay}" 
+                  VerticalOptions="Center" />
+
+        <!-- Label -->
+        <Label Grid.Row="0" Grid.Column="1"
+               Text="Auto-refresh every"
+               TextColor="{DynamicResource TextPrimary}"
+               VerticalTextAlignment="Center" />
+
+        <!-- Segmented radio container -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{DynamicResource SegmentHost}">
+            <!-- Flex wraps on small widths; never clips the 60s button -->
+            <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center" AlignContent="Start" JustifyContent="Start">
+                <RadioButton Style="{DynamicResource ChipRadio}" GroupName="AutoRefreshInterval"
+                             Content="30s"
+                             IsChecked="{Binding RefreshIntervalSeconds, Mode=TwoWay,
+                                         Converter={StaticResource EqInt}, ConverterParameter=30}"/>
+                <RadioButton Style="{DynamicResource ChipRadio}" GroupName="AutoRefreshInterval"
+                             Content="60s"
+                             IsChecked="{Binding RefreshIntervalSeconds, Mode=TwoWay,
+                                         Converter={StaticResource EqInt}, ConverterParameter=60}"/>
+            </FlexLayout>
+        </Border>
+    </Grid>
+</ContentView>

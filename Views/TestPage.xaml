@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MarketScanner.Views.TestPage"
+             Title="Test Page">
+    <StackLayout>
+        <Label Text="Hello World!" 
+               FontSize="24" 
+               HorizontalOptions="Center" 
+               VerticalOptions="Center" />
+        <Button Text="Click Me" 
+                Clicked="OnButtonClicked" />
+    </StackLayout>
+</ContentPage>
