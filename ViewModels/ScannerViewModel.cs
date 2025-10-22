@@ -23,7 +23,7 @@ public partial class ScannerViewModel : ObservableObject
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
     private bool _disposed = false;
-    
+
     // Track previous scan-level filters for hybrid filtering
     private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN)? _previousScanFilters;
 
@@ -38,7 +38,7 @@ public partial class ScannerViewModel : ObservableObject
     private readonly System.Timers.Timer _batchTimer;
     private readonly Dictionary<string, ScannerRowViewModel> _rowLookup = new();
     private bool _uiReady = false;
-    
+
     private const int BatchIntervalMs = 16; // ~60 FPS for smooth updates
     private const int MaxBatchSize = 50;
 
@@ -56,45 +56,45 @@ public partial class ScannerViewModel : ObservableObject
     [ObservableProperty] private bool _isRefreshing = false;
     [ObservableProperty] private bool _isLoading = false;
     [ObservableProperty] private string _errorMessage = "";
-        [ObservableProperty] private bool _autoRefreshEnabled = false;
-        [ObservableProperty] private int _refreshIntervalSeconds = 60; // default 60
+    [ObservableProperty] private bool _autoRefreshEnabled = false;
+    [ObservableProperty] private int _refreshIntervalSeconds = 60; // default 60
 
     // Options for pickers
 
     public List<string> ExchangeOptions { get; } = new() { "us stocks", "nasdaq", "nyse", "amex", "otc" };
     public List<int> TopNOptions { get; } = new() { 5, 10, 15, 20, 50 };
 
-        private readonly Debounce _debounce = new(TimeSpan.FromMilliseconds(50)); // very responsive for production use
-        
-        // Auto-refresh timer fields
-        private CancellationTokenSource? _autoCts;
-        private Task? _autoTask;
+    private readonly Debounce _debounce = new(TimeSpan.FromMilliseconds(50)); // very responsive for production use
 
-        // Property change handlers - all use debounced filtering
-        partial void OnMinChangePercentTextChanged(string value) => DebouncedApply();
-        partial void OnVolumeMinTextChanged(string value) => DebouncedApply();
-        
-        // Auto-refresh property change handlers
-        partial void OnRefreshIntervalSecondsChanged(int oldValue, int newValue)
-        {
-            // Persist selection
-            Preferences.Set("refresh.interval.seconds", newValue);
-            // If auto-refresh is on, restart quickly
+    // Auto-refresh timer fields
+    private CancellationTokenSource? _autoCts;
+    private Task? _autoTask;
+
+    // Property change handlers - all use debounced filtering
+    partial void OnMinChangePercentTextChanged(string value) => DebouncedApply();
+    partial void OnVolumeMinTextChanged(string value) => DebouncedApply();
+
+    // Auto-refresh property change handlers
+    partial void OnRefreshIntervalSecondsChanged(int oldValue, int newValue)
+    {
+        // Persist selection
+        Preferences.Set("refresh.interval.seconds", newValue);
+        // If auto-refresh is on, restart quickly
+        RestartAutoRefreshTimerIfNeeded();
+    }
+
+    partial void OnAutoRefreshEnabledChanged(bool oldValue, bool newValue)
+    {
+        Preferences.Set("refresh.enabled", newValue);
+        if (newValue)
             RestartAutoRefreshTimerIfNeeded();
-        }
-
-        partial void OnAutoRefreshEnabledChanged(bool oldValue, bool newValue)
+        else
         {
-            Preferences.Set("refresh.enabled", newValue);
-            if (newValue) 
-                RestartAutoRefreshTimerIfNeeded();
-            else 
-            {
-                // Stop auto-refresh immediately (synchronous cancellation)
-                try { _autoCts?.Cancel(); } catch { }
-                _autoTask = null;  // Don't wait for task, just null it
-            }
+            // Stop auto-refresh immediately (synchronous cancellation)
+            try { _autoCts?.Cancel(); } catch { }
+            _autoTask = null;  // Don't wait for task, just null it
         }
+    }
 
     public ScannerViewModel(IScanner scanner, IDispatcherService dispatcher, ILogger<ScannerViewModel> logger)
     {
@@ -119,10 +119,10 @@ public partial class ScannerViewModel : ObservableObject
                 _batchedTicks.Enqueue(tick);
             });
         }
-            
-            // Subscribe to property changes for debounced filtering
-            PropertyChanged += (_, e) =>
-            {
+
+        // Subscribe to property changes for debounced filtering
+        PropertyChanged += (_, e) =>
+        {
             // Auto-reset exchange to "any" when region changes to non-US to avoid IBKR mismatch errors
 
             {
@@ -131,23 +131,23 @@ public partial class ScannerViewModel : ObservableObject
 
                 }
             }
-            
-                if (e.PropertyName?.StartsWith("Min") == true || 
-                    e.PropertyName?.StartsWith("Max") == true ||
-                    e.PropertyName?.StartsWith("Selected") == true ||
-                    e.PropertyName?.StartsWith("TopN") == true ||
-                    e.PropertyName?.StartsWith("Exchange") == true)
-                {
-                    DebouncedApply();
-                }
-            };
-            
-            // Load refresh preferences after initialization
-            LoadRefreshPrefs();
-            
-            // Wire auto-refresh property changes
-            WireAutoRefresh();
-        }
+
+            if (e.PropertyName?.StartsWith("Min") == true ||
+                e.PropertyName?.StartsWith("Max") == true ||
+                e.PropertyName?.StartsWith("Selected") == true ||
+                e.PropertyName?.StartsWith("TopN") == true ||
+                e.PropertyName?.StartsWith("Exchange") == true)
+            {
+                DebouncedApply();
+            }
+        };
+
+        // Load refresh preferences after initialization
+        LoadRefreshPrefs();
+
+        // Wire auto-refresh property changes
+        WireAutoRefresh();
+    }
 
     private void SetProductionDefaults()
     {
@@ -159,13 +159,13 @@ public partial class ScannerViewModel : ObservableObject
         VolumeMinText = "100000";
         TopN = 50;
         MinChangePercentText = "";  // No default change% filter
-        
+
         // DISABLED: Auto-refresh on loosening
         // _previousMinPrice = 2;
         // _previousMaxPrice = 20;
         // _previousMinVolume = 100000;
         // _previousMinChgPct = null;
-        
+
         _logger.LogInformation("Set production defaults: Price={MinPrice}-{MaxPrice}, Volume={VolumeMin}, TopN={TopN}",
             MinPriceText, MaxPriceText, VolumeMinText, TopN);
     }
@@ -178,7 +178,7 @@ public partial class ScannerViewModel : ObservableObject
         MaxPriceText = "20";
         VolumeMinText = "100000";
         TopN = 50;
-        
+
         _logger.LogInformation("Filters reset to production defaults");
     }
 
@@ -188,7 +188,7 @@ public partial class ScannerViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         if (IsRefreshing || IsLoading) return;
-        
+
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
 
@@ -197,33 +197,32 @@ public partial class ScannerViewModel : ObservableObject
             IsRefreshing = true;
             ErrorMessage = "";
             DebugStatus = "Loading data...";
-            
+
             // Start batch timer now that we're refreshing (UI should be ready)
             StartBatchTimer();
-            
+
             _logger.LogInformation("Starting data refresh...");
-            
+
             // Get current scan-level filter values
             var minPrice = ParseDecimalSafe(MinPriceText) ?? 2;
             var maxPrice = ParseDecimalSafe(MaxPriceText) ?? 20;
-            const string region = "us";  // Always US
             const string product = "stocks";  // Always stocks
             var exchange = IsAnyValue(Exchange) ? "us stocks" : Exchange.ToLowerInvariant();
-            
+
             // Get fresh data using the scanner service with dynamic parameters
             // Cast to concrete type to access overloaded ScanAsync method
-            var rows = _scanner is IbkrGatewayService ibkrGateway 
-                ? await ibkrGateway.ScanAsync(minPrice, maxPrice, region, product, exchange, TopN, _cts.Token)
+            var rows = _scanner is IbkrGatewayService ibkrGateway
+                ? await ibkrGateway.ScanAsync(minPrice, maxPrice, product, exchange, TopN, _cts.Token)
                 : await _scanner.ScanAsync(_cts.Token);
-            
+
             _logger.LogInformation("Received {Count} rows from scanner", rows.Count);
-            
+
             // Clear existing rows and rebuild from scanner results
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 ScannerItems.Clear();
                 _rowLookup.Clear();
-                
+
                 foreach (var row in rows)
                 {
                     var rowVm = new ScannerRowViewModel
@@ -239,14 +238,14 @@ public partial class ScannerViewModel : ObservableObject
                         AvgVolume = (long)row.AvgVolume
                     };
                     // RelativeVolume is auto-calculated in ScannerRowViewModel
-                    
+
                     _rowLookup[row.Symbol] = rowVm;
                     ScannerItems.Add(rowVm);
                 }
-                
+
                 _logger.LogInformation("Created {Count} ScannerRowViewModel instances", ScannerItems.Count);
             });
-            
+
             // Re-apply client-side filters (TopN, MinChangePercent, Volume)
             await ApplyFiltersAsync();
         }
@@ -257,10 +256,10 @@ public partial class ScannerViewModel : ObservableObject
             ErrorMessage = ex.Message;
             DebugStatus = $"Error: {ex.Message}";
         }
-        finally 
-        { 
+        finally
+        {
             IsRefreshing = false;
-            DebugStatus = $"ScannerItems: {ScannerItems.Count}"; 
+            DebugStatus = $"ScannerItems: {ScannerItems.Count}";
             _logger.LogInformation("RefreshAsync completed: ScannerItems={ScannerItemsCount}", ScannerItems.Count);
         }
     }
@@ -275,7 +274,7 @@ public partial class ScannerViewModel : ObservableObject
             {
                 var processedCount = 0;
                 var updatedSymbols = new HashSet<string>();
-                
+
                 while (_batchedTicks.TryDequeue(out var tick) && processedCount < MaxBatchSize)
                 {
                     var rowVm = GetOrCreateRow(tick.Symbol);
@@ -284,7 +283,7 @@ public partial class ScannerViewModel : ObservableObject
                     updatedSymbols.Add(tick.Symbol);
                     processedCount++;
                 }
-                
+
                 if (processedCount > 0)
                 {
                     DebugStatus = $"Updated {updatedSymbols.Count} symbols ({processedCount} ticks)";
@@ -305,7 +304,7 @@ public partial class ScannerViewModel : ObservableObject
             _logger.LogError("Batch timer is null - cannot start");
             return;
         }
-        
+
         if (!_batchTimer.Enabled)
         {
             _uiReady = true;
@@ -370,10 +369,10 @@ public partial class ScannerViewModel : ObservableObject
 
         // Check if scan-level filters changed
         var requiresRescan = _previousScanFilters.Value != currentScanFilters;
-        
+
         if (requiresRescan)
         {
-            _logger.LogInformation("Scan-level filters changed: {Previous} -> {Current}, triggering re-scan", 
+            _logger.LogInformation("Scan-level filters changed: {Previous} -> {Current}, triggering re-scan",
                 _previousScanFilters.Value, currentScanFilters);
             _previousScanFilters = currentScanFilters;
         }
@@ -433,7 +432,7 @@ public partial class ScannerViewModel : ObservableObject
     private async Task ApplyFiltersAsync()
     {
         if (_disposed) return;
-        
+
         // DISABLED: Auto-refresh on loosening (user requested client-side filtering only)
         // if (IsFilterLoosened())
         // {
@@ -441,7 +440,7 @@ public partial class ScannerViewModel : ObservableObject
         //     await RefreshAsync();
         //     return; // RefreshAsync will call ApplyFiltersAsync again after loading data
         // }
-        
+
         // Check if we need to re-scan at IBKR level
         if (RequiresRescan())
         {
@@ -451,7 +450,7 @@ public partial class ScannerViewModel : ObservableObject
         }
 
         // If no items, skip client-side filtering
-        if (ScannerItems.Count == 0) 
+        if (ScannerItems.Count == 0)
         {
             _logger.LogInformation("ApplyFiltersAsync skipped - no items to filter");
             return;
@@ -477,7 +476,7 @@ public partial class ScannerViewModel : ObservableObject
             criteria.MinPrice, criteria.MaxPrice, criteria.MinVolume, criteria.MinChgPct, criteria.TopN);
 
         var rows = ScannerItems.ToArray(); // copy to array for fast indexer
-        
+
         // Cancel previous filter operation and create new one
         try
         {
@@ -496,7 +495,7 @@ public partial class ScannerViewModel : ObservableObject
 
         var result = await Task.Run(() => FilterEngine.Apply(rows, criteria), token);
 
-        if (epoch != _applyEpoch) 
+        if (epoch != _applyEpoch)
         {
             _logger.LogInformation("ApplyFiltersAsync cancelled - stale compute");
             return; // stale compute – ignore
@@ -536,139 +535,139 @@ public partial class ScannerViewModel : ObservableObject
         }
     }
 
-        /// <summary>
-        /// Load refresh preferences from storage
-        /// </summary>
-        public void LoadRefreshPrefs()
-        {
-            RefreshIntervalSeconds = Preferences.Get("refresh.interval.seconds", 60);
-            AutoRefreshEnabled = Preferences.Get("refresh.enabled", false);
-        }
+    /// <summary>
+    /// Load refresh preferences from storage
+    /// </summary>
+    public void LoadRefreshPrefs()
+    {
+        RefreshIntervalSeconds = Preferences.Get("refresh.interval.seconds", 60);
+        AutoRefreshEnabled = Preferences.Get("refresh.enabled", false);
+    }
 
-        /// <summary>
-        /// Wire auto-refresh property changes to trigger refresh logic
-        /// </summary>
-        private void WireAutoRefresh()
+    /// <summary>
+    /// Wire auto-refresh property changes to trigger refresh logic
+    /// </summary>
+    private void WireAutoRefresh()
+    {
+        PropertyChanged += (_, e) =>
         {
-            PropertyChanged += (_, e) =>
+            if (e.PropertyName == nameof(AutoRefreshEnabled) || e.PropertyName == nameof(RefreshIntervalSeconds))
             {
-                if (e.PropertyName == nameof(AutoRefreshEnabled) || e.PropertyName == nameof(RefreshIntervalSeconds))
-                {
-                    RestartAutoRefreshTimerIfNeeded();
-                }
-            };
-        }
-
-        /// <summary>
-        /// Stop the auto-refresh timer
-        /// </summary>
-        public async Task StopAutoRefreshAsync()
-        {
-            try 
-            { 
-                _autoCts?.Cancel(); 
-                _autoCts?.Dispose();
-                _autoCts = null;
-            } 
-            catch { }
-            
-            if (_autoTask != null)
-            {
-                try { await _autoTask; } catch { }
-            _autoTask = null;
-            }
-        }
-
-        /// <summary>
-        /// Restart the auto-refresh timer if enabled
-        /// </summary>
-        public void RestartAutoRefreshTimerIfNeeded()
-        {
-            _ = Task.Run(async () =>
-            {
-                await StopAutoRefreshAsync();
-                if (!AutoRefreshEnabled) return;
-
-                var cts = new CancellationTokenSource();
-                var token = cts.Token;  // Capture token BEFORE assigning to field
-                _autoCts = cts;  // Now assign to field
-                
-                // Use captured token (safe even if cts gets disposed)
-                _autoTask = Task.Run(() => RunAutoRefreshLoopAsync(token));
-            });
-        }
-
-        /// <summary>
-        /// Run the auto-refresh loop with proper error handling
-        /// </summary>
-        private async Task RunAutoRefreshLoopAsync(CancellationToken ct)
-        {
-            // Start with immediate refresh
-            await RefreshAsync().ConfigureAwait(false);
-
-            while (!ct.IsCancellationRequested)
-            {
-                var delay = Math.Max(5, RefreshIntervalSeconds); // floor to 5s
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(delay), ct).ConfigureAwait(false);
-                    if (!ct.IsCancellationRequested)
-                        await RefreshAsync().ConfigureAwait(false);
-                }
-                catch (TaskCanceledException) { }
-            }
-        }
-
-        /// <summary>
-        /// Handle auto-refresh toggle
-        /// </summary>
-        public async Task OnAutoRefreshToggledAsync(bool isEnabled)
-        {
-            if (isEnabled)
                 RestartAutoRefreshTimerIfNeeded();
-            else
-                await StopAutoRefreshAsync();
-        }
+            }
+        };
+    }
 
-        private IRelayCommand? _resetFiltersCommand;
-        public IRelayCommand ResetFiltersCommand => _resetFiltersCommand ??=
-            new RelayCommand(async () =>
-            {
-        
-                Exchange = "us stocks";
-                MinPriceText = "2";
-                MaxPriceText = "20";
-                VolumeMinText = "100000";
-                MinChangePercentText = "";
-                TopN = 50;
-
-                await ApplyFiltersAsync();
-
-                // Stop auto-refresh timer when resetting filters
-                await StopAutoRefreshAsync();
-            });
-
-        public void Dispose()
+    /// <summary>
+    /// Stop the auto-refresh timer
+    /// </summary>
+    public async Task StopAutoRefreshAsync()
+    {
+        try
         {
+            _autoCts?.Cancel();
+            _autoCts?.Dispose();
+            _autoCts = null;
+        }
+        catch { }
+
+        if (_autoTask != null)
+        {
+            try { await _autoTask; } catch { }
+            _autoTask = null;
+        }
+    }
+
+    /// <summary>
+    /// Restart the auto-refresh timer if enabled
+    /// </summary>
+    public void RestartAutoRefreshTimerIfNeeded()
+    {
+        _ = Task.Run(async () =>
+        {
+            await StopAutoRefreshAsync();
+            if (!AutoRefreshEnabled) return;
+
+            var cts = new CancellationTokenSource();
+            var token = cts.Token;  // Capture token BEFORE assigning to field
+            _autoCts = cts;  // Now assign to field
+
+            // Use captured token (safe even if cts gets disposed)
+            _autoTask = Task.Run(() => RunAutoRefreshLoopAsync(token));
+        });
+    }
+
+    /// <summary>
+    /// Run the auto-refresh loop with proper error handling
+    /// </summary>
+    private async Task RunAutoRefreshLoopAsync(CancellationToken ct)
+    {
+        // Start with immediate refresh
+        await RefreshAsync().ConfigureAwait(false);
+
+        while (!ct.IsCancellationRequested)
+        {
+            var delay = Math.Max(5, RefreshIntervalSeconds); // floor to 5s
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delay), ct).ConfigureAwait(false);
+                if (!ct.IsCancellationRequested)
+                    await RefreshAsync().ConfigureAwait(false);
+            }
+            catch (TaskCanceledException) { }
+        }
+    }
+
+    /// <summary>
+    /// Handle auto-refresh toggle
+    /// </summary>
+    public async Task OnAutoRefreshToggledAsync(bool isEnabled)
+    {
+        if (isEnabled)
+            RestartAutoRefreshTimerIfNeeded();
+        else
+            await StopAutoRefreshAsync();
+    }
+
+    private IRelayCommand? _resetFiltersCommand;
+    public IRelayCommand ResetFiltersCommand => _resetFiltersCommand ??=
+        new RelayCommand(async () =>
+        {
+
+            Exchange = "us stocks";
+            MinPriceText = "2";
+            MaxPriceText = "20";
+            VolumeMinText = "100000";
+            MinChangePercentText = "";
+            TopN = 50;
+
+            await ApplyFiltersAsync();
+
+            // Stop auto-refresh timer when resetting filters
+            await StopAutoRefreshAsync();
+        });
+
+    public void Dispose()
+    {
         _disposed = true;
-        
-            _cts?.Cancel();
-            _cts?.Dispose();
-        
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+
         // Ensure proper disposal order for filter CTS
         _filterCts?.Cancel();
         Task.Delay(50).Wait();  // Give pending operations time to cancel
         _filterCts?.Dispose();
-        
+
         // Stop batch timer
         _batchTimer?.Stop();
         _batchTimer?.Dispose();
-        
-            _ = StopAutoRefreshAsync();
-            _autoCts?.Dispose();
-            _debounce.Dispose();
-        
+
+        _ = StopAutoRefreshAsync();
+        _autoCts?.Dispose();
+        _debounce.Dispose();
+
         // Stop scanner
         _ = Task.Run(async () => await _scanner.StopAsync());
-        }
+    }
 }
