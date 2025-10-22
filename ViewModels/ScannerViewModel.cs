@@ -25,13 +25,7 @@ public partial class ScannerViewModel : ObservableObject
     private bool _disposed = false;
 
     // Track previous scan-level filters for hybrid filtering
-    private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN)? _previousScanFilters;
-
-    // DISABLED: Auto-refresh on loosening (client-side filtering only)
-    // private decimal? _previousMinPrice;
-    // private decimal? _previousMaxPrice;
-    // private decimal? _previousMinChgPct;
-    // private long? _previousMinVolume;
+    private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN, decimal? minChgPct)? _previousScanFilters;
 
     // UI batching for ultra-smooth updates (60 FPS)
     private readonly ConcurrentQueue<TickData> _batchedTicks = new();
@@ -159,12 +153,6 @@ public partial class ScannerViewModel : ObservableObject
         VolumeMinText = "100000";
         TopN = 50;
         MinChangePercentText = "";  // No default change% filter
-
-        // DISABLED: Auto-refresh on loosening
-        // _previousMinPrice = 2;
-        // _previousMaxPrice = 20;
-        // _previousMinVolume = 100000;
-        // _previousMinChgPct = null;
 
         _logger.LogInformation("Set production defaults: Price={MinPrice}-{MaxPrice}, Volume={VolumeMin}, TopN={TopN}",
             MinPriceText, MaxPriceText, VolumeMinText, TopN);
@@ -345,9 +333,9 @@ public partial class ScannerViewModel : ObservableObject
 
     /// <summary>
     /// Determines if the current filter changes require a re-scan at IBKR level.
-    /// Re-scan triggers: price range, exchange, TopN changes.
-    /// Client-side only: volume, MinChgPct (with smart auto-refresh on loosening).
-    /// Note: Price changes always trigger re-scan (not subject to loosening logic).
+    /// Re-scan triggers: price range, exchange, TopN, MinChgPct changes.
+    /// Client-side only: volume.
+    /// Note: All scan-level changes trigger re-scan with fresh IBKR data.
     /// </summary>
     private bool RequiresRescan()
     {
@@ -357,8 +345,9 @@ public partial class ScannerViewModel : ObservableObject
         const string currentProduct = "stocks";  // Always stocks
         var currentExchange = IsAnyValue(Exchange) ? "us stocks" : Exchange.ToLowerInvariant();
         var currentTopN = TopN;
+        var currentMinChgPct = ParsePercentSafe(MinChangePercentText);
 
-        var currentScanFilters = (currentMinPrice, currentMaxPrice, currentRegion, currentProduct, currentExchange, currentTopN);
+        var currentScanFilters = (currentMinPrice, currentMaxPrice, currentRegion, currentProduct, currentExchange, currentTopN, currentMinChgPct);
 
         // If no previous scan, we need to scan
         if (_previousScanFilters == null)
@@ -380,66 +369,9 @@ public partial class ScannerViewModel : ObservableObject
         return requiresRescan;
     }
 
-    // DISABLED: Auto-refresh on loosening (client-side filtering only for now)
-    // /// <summary>
-    // /// Checks if filter changes require auto-refresh (filter loosened).
-    // /// Loosening = expanding the range (more permissive filter).
-    // /// </summary>
-    // private bool IsFilterLoosened()
-    // {
-    //     var currentMinPrice = ParseDecimalSafe(MinPriceText) ?? 2;
-    //     var currentMaxPrice = ParseDecimalSafe(MaxPriceText) ?? 20;
-    //     var currentMinChgPct = ParsePercentSafe(MinChangePercentText);
-    //     var currentMinVolume = ParseDecimalSafe(VolumeMinText) != null ? (long)ParseDecimalSafe(VolumeMinText)!.Value : (long?)null;
-    //
-    //     bool loosened = false;
-    //
-    //     // Price range loosened: MinPrice decreased OR MaxPrice increased
-    //     if (_previousMinPrice.HasValue && currentMinPrice < _previousMinPrice.Value)
-    //     {
-    //         _logger.LogInformation("MinPrice loosened from ${Old} to ${New}, triggering auto-refresh", _previousMinPrice.Value, currentMinPrice);
-    //         loosened = true;
-    //     }
-    //     if (_previousMaxPrice.HasValue && currentMaxPrice > _previousMaxPrice.Value)
-    //     {
-    //         _logger.LogInformation("MaxPrice loosened from ${Old} to ${New}, triggering auto-refresh", _previousMaxPrice.Value, currentMaxPrice);
-    //         loosened = true;
-    //     }
-    //
-    //     // MinChgPct loosened: decreased (e.g., 25% → 22%)
-    //     if (_previousMinChgPct.HasValue && currentMinChgPct.HasValue && currentMinChgPct.Value < _previousMinChgPct.Value)
-    //     {
-    //         _logger.LogInformation("MinChgPct loosened from {Old}% to {New}%, triggering auto-refresh", _previousMinChgPct.Value, currentMinChgPct.Value);
-    //         loosened = true;
-    //     }
-    //
-    //     // MinVolume loosened: decreased (e.g., 200k → 100k)
-    //     if (_previousMinVolume.HasValue && currentMinVolume.HasValue && currentMinVolume.Value < _previousMinVolume.Value)
-    //     {
-    //         _logger.LogInformation("MinVolume loosened from {Old:N0} to {New:N0}, triggering auto-refresh", _previousMinVolume.Value, currentMinVolume.Value);
-    //         loosened = true;
-    //     }
-    //
-    //     // Update tracked values
-    //     _previousMinPrice = currentMinPrice;
-    //     _previousMaxPrice = currentMaxPrice;
-    //     _previousMinChgPct = currentMinChgPct;
-    //     _previousMinVolume = currentMinVolume;
-    //
-    //     return loosened;
-    // }
-
     private async Task ApplyFiltersAsync()
     {
         if (_disposed) return;
-
-        // DISABLED: Auto-refresh on loosening (user requested client-side filtering only)
-        // if (IsFilterLoosened())
-        // {
-        //     _logger.LogInformation("Filter loosened detected after debounce, triggering refresh");
-        //     await RefreshAsync();
-        //     return; // RefreshAsync will call ApplyFiltersAsync again after loading data
-        // }
 
         // Check if we need to re-scan at IBKR level
         if (RequiresRescan())
