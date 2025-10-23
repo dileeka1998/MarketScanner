@@ -25,7 +25,10 @@ public partial class ScannerViewModel : ObservableObject
     private bool _disposed = false;
 
     // Track previous scan-level filters for hybrid filtering
-    private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN, decimal? minChgPct)? _previousScanFilters;
+    private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN)? _previousScanFilters;
+
+    // Track symbols waiting for initial tick data (for MinChgPct filter)
+    private HashSet<string>? _pendingInitialTicks;
 
     // UI batching for ultra-smooth updates (60 FPS)
     private readonly ConcurrentQueue<TickData> _batchedTicks = new();
@@ -35,6 +38,32 @@ public partial class ScannerViewModel : ObservableObject
 
     private const int BatchIntervalMs = 16; // ~60 FPS for smooth updates
     private const int MaxBatchSize = 50;
+
+    // ============================================================================
+    // DATA ARCHITECTURE
+    // ============================================================================
+    // Snapshot: Immutable baseline from IBKR scan (ScannerRowViewModel[])
+    //   - Replaced only when ScanFilters change (price, exchange, topN)
+    //   - Updated in-place by live ticks (ChangePercent recalculated)
+    //   - Source of truth for filtering
+    //
+    // ScannerItems (ShownData): Filtered/sorted view bound to UI
+    //   - Derived from: Snapshot + ViewFilters
+    //   - Updated instantly when ViewFilters change (MinChgPct, MinVolume)
+    //   - ObservableCollection bound to CollectionView
+    //
+    // FILTER BUCKETS
+    // ============================================================================
+    // ScanFilters (trigger IBKR rescan):
+    //   - MinPrice, MaxPrice, Exchange, TopN
+    //   - Requires IBKR API call → replaces Snapshot
+    //
+    // ViewFilters (instant client-side):
+    //   - MinChgPct (% change threshold), MinVolume
+    //   - No IBKR call → derives ShownData from Snapshot
+    // ============================================================================
+
+    private ScannerRowViewModel[] _snapshot = Array.Empty<ScannerRowViewModel>();
 
     [ObservableProperty] private ObservableCollection<ScannerRowViewModel> _scannerItems = new();
     [ObservableProperty] private string _debugStatus = "";
@@ -59,6 +88,7 @@ public partial class ScannerViewModel : ObservableObject
     public List<int> TopNOptions { get; } = new() { 5, 10, 15, 20, 50 };
 
     private readonly Debounce _debounce = new(TimeSpan.FromMilliseconds(50)); // very responsive for production use
+    private readonly Debounce _priceDebouncer = new(TimeSpan.FromMilliseconds(800)); // longer delay for price to prevent rescans on each keystroke
 
     // Auto-refresh timer fields
     private CancellationTokenSource? _autoCts;
@@ -126,7 +156,12 @@ public partial class ScannerViewModel : ObservableObject
                 }
             }
 
-            if (e.PropertyName?.StartsWith("Min") == true ||
+            // Use longer debounce for price changes to prevent IBKR rescans on each keystroke
+            if (e.PropertyName == nameof(MinPriceText) || e.PropertyName == nameof(MaxPriceText))
+            {
+                _ = _priceDebouncer.ExecuteAsync(ApplyFiltersAsync);
+            }
+            else if (e.PropertyName?.StartsWith("Min") == true ||
                 e.PropertyName?.StartsWith("Max") == true ||
                 e.PropertyName?.StartsWith("Selected") == true ||
                 e.PropertyName?.StartsWith("TopN") == true ||
@@ -180,6 +215,11 @@ public partial class ScannerViewModel : ObservableObject
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
 
+        // Clear state from previous scan to prevent data leakage
+        _rowLookup.Clear();
+        while (_batchedTicks.TryDequeue(out _)) { } // Clear queued ticks
+        _snapshot = Array.Empty<ScannerRowViewModel>(); // Clear snapshot
+
         try
         {
             IsRefreshing = true;
@@ -226,16 +266,28 @@ public partial class ScannerViewModel : ObservableObject
                         AvgVolume = (long)row.AvgVolume
                     };
                     // RelativeVolume is auto-calculated in ScannerRowViewModel
-
                     _rowLookup[row.Symbol] = rowVm;
                     ScannerItems.Add(rowVm);
                 }
 
                 _logger.LogInformation("Created {Count} ScannerRowViewModel instances", ScannerItems.Count);
+
+                // Store as immutable snapshot (baseline for filtering)
+                _snapshot = ScannerItems.ToArray();
             });
 
-            // Re-apply client-side filters (TopN, MinChangePercent, Volume)
+        // Re-apply client-side filters (TopN, MinChangePercent, Volume)
+        // If MinChgPct filter is active, wait for all symbols to receive initial tick data
+        if (!string.IsNullOrWhiteSpace(MinChangePercentText))
+        {
+            _pendingInitialTicks = new HashSet<string>(rows.Select(r => r.Symbol));
+            _logger.LogInformation("MinChgPct filter active - waiting for {Count} symbols to receive initial tick data", _pendingInitialTicks.Count);
+        }
+        else
+        {
+            // No MinChgPct filter - apply other filters immediately
             await ApplyFiltersAsync();
+        }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -270,6 +322,21 @@ public partial class ScannerViewModel : ObservableObject
                     // RelativeVolume is auto-calculated in ScannerRowViewModel
                     updatedSymbols.Add(tick.Symbol);
                     processedCount++;
+
+                    // Check if this completes initial tick loading for MinChgPct filter
+                    if (_pendingInitialTicks != null && rowVm.PrevClose > 0 && _pendingInitialTicks.Remove(tick.Symbol))
+                    {
+                        if (_pendingInitialTicks.Count == 0)
+                        {
+                            _logger.LogInformation("All {Total} initial ticks received, applying MinChgPct filter", ScannerItems.Count);
+                            _pendingInitialTicks = null;
+                            _ = Task.Run(async () => await ApplyFiltersAsync());
+                        }
+                        else if (_pendingInitialTicks.Count % 10 == 0)
+                        {
+                            _logger.LogDebug("Waiting for {Pending} more ticks", _pendingInitialTicks.Count);
+                        }
+                    }
                 }
 
                 if (processedCount > 0)
@@ -332,10 +399,9 @@ public partial class ScannerViewModel : ObservableObject
     private static decimal? ParsePercentSafe(string? s) => Parsing.ParsePercent(s);
 
     /// <summary>
-    /// Determines if the current filter changes require a re-scan at IBKR level.
-    /// Re-scan triggers: price range, exchange, TopN, MinChgPct changes.
-    /// Client-side only: volume.
-    /// Note: All scan-level changes trigger re-scan with fresh IBKR data.
+    /// Determines if current filter changes require IBKR rescan (ScanFilters).
+    /// ScanFilters: price range, exchange, TopN → Replace Snapshot
+    /// ViewFilters: MinChgPct, volume → Derive ShownData from Snapshot
     /// </summary>
     private bool RequiresRescan()
     {
@@ -345,9 +411,9 @@ public partial class ScannerViewModel : ObservableObject
         const string currentProduct = "stocks";  // Always stocks
         var currentExchange = IsAnyValue(Exchange) ? "us stocks" : Exchange.ToLowerInvariant();
         var currentTopN = TopN;
-        var currentMinChgPct = ParsePercentSafe(MinChangePercentText);
+        // MinChgPct removed - it's client-side only, no re-scan needed
 
-        var currentScanFilters = (currentMinPrice, currentMaxPrice, currentRegion, currentProduct, currentExchange, currentTopN, currentMinChgPct);
+        var currentScanFilters = (currentMinPrice, currentMaxPrice, currentRegion, currentProduct, currentExchange, currentTopN);
 
         // If no previous scan, we need to scan
         if (_previousScanFilters == null)
@@ -369,6 +435,11 @@ public partial class ScannerViewModel : ObservableObject
         return requiresRescan;
     }
 
+    /// <summary>
+    /// Applies ViewFilters to Snapshot and updates ShownData (ScannerItems).
+    /// Always filters from Snapshot (not from filtered results) to support
+    /// both tightening (10%→15%) and loosening (15%→10%) of filters.
+    /// </summary>
     private async Task ApplyFiltersAsync()
     {
         if (_disposed) return;
@@ -407,7 +478,17 @@ public partial class ScannerViewModel : ObservableObject
         _logger.LogInformation("Filter criteria: MinPrice={MinPrice}, MaxPrice={MaxPrice}, MinVolume={MinVolume}, MinChgPct={MinChgPct}, TopN={TopN}",
             criteria.MinPrice, criteria.MaxPrice, criteria.MinVolume, criteria.MinChgPct, criteria.TopN);
 
-        var rows = ScannerItems.ToArray(); // copy to array for fast indexer
+        // Always derive ShownData from Snapshot (not from filtered results)
+        // This allows loosening filters (15% → 10%) to show previously hidden stocks
+        var rows = _snapshot.Length > 0 ? _snapshot : ScannerItems.ToArray();
+
+        // Log all snapshot data with ChangePercent values
+        _logger.LogInformation("=== SNAPSHOT DATA ({Count} stocks) ===", rows.Length);
+        foreach (var row in rows.OrderByDescending(r => r.ChangePercent))
+        {
+            _logger.LogInformation("  {Symbol}: Price=${Price:F2}, Change={Change:F2}%, Volume={Volume:N0}",
+                row.Symbol, row.LastPrice, row.ChangePercent, row.Volume);
+        }
 
         // Cancel previous filter operation and create new one
         try
@@ -425,7 +506,7 @@ public partial class ScannerViewModel : ObservableObject
         // Check if cancelled before expensive operation
         if (_filterCts?.IsCancellationRequested == true) return;
 
-        var result = await Task.Run(() => FilterEngine.Apply(rows, criteria), token);
+        var result = await Task.Run(() => FilterEngine.Apply(rows, criteria, _logger), token);
 
         if (epoch != _applyEpoch)
         {
@@ -434,6 +515,15 @@ public partial class ScannerViewModel : ObservableObject
         }
 
         _logger.LogInformation("FilterEngine.Apply returned {FilteredCount} of {TotalCount} items", result.TopIndices.Length, rows.Length);
+
+        // Log filtered results
+        _logger.LogInformation("=== FILTERED RESULTS ({Count} stocks passed) ===", result.TopIndices.Length);
+        foreach (var i in result.TopIndices.OrderByDescending(idx => rows[idx].ChangePercent))
+        {
+            var row = rows[i];
+            _logger.LogInformation("  {Symbol}: Price=${Price:F2}, Change={Change:F2}%, Volume={Volume:N0}",
+                row.Symbol, row.LastPrice, row.ChangePercent, row.Volume);
+        }
 
         // Marshal to UI thread once with the FILTERED set
         await MainThread.InvokeOnMainThreadAsync(() =>
@@ -582,6 +672,7 @@ public partial class ScannerViewModel : ObservableObject
     public void Dispose()
     {
         _disposed = true;
+        _snapshot = Array.Empty<ScannerRowViewModel>();
 
         _cts?.Cancel();
         _cts?.Dispose();
@@ -598,6 +689,7 @@ public partial class ScannerViewModel : ObservableObject
         _ = StopAutoRefreshAsync();
         _autoCts?.Dispose();
         _debounce.Dispose();
+        _priceDebouncer.Dispose();
 
         // Stop scanner
         _ = Task.Run(async () => await _scanner.StopAsync());
