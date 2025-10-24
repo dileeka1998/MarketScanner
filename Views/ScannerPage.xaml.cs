@@ -292,20 +292,4 @@ public partial class ScannerPage : ContentPage
             vm.GetType().GetMethod("DebouncedApply", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
               ?.Invoke(vm, null);
     }
-
-    private void OnOpenWatchlistClicked(object sender, EventArgs e)
-    {
-        // Create watchlist window and open it
-        var watchlistWindow = Handler?.MauiContext?.Services.GetService<WatchlistWindow>();
-        if (watchlistWindow != null)
-        {
-            var window = new Window(watchlistWindow)
-            {
-                Title = "Watchlist",
-                Width = 1200,
-                Height = 800
-            };
-            Application.Current?.OpenWindow(window);
-        }
-    }
 }

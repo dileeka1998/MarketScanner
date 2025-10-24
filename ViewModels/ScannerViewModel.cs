@@ -20,6 +20,7 @@ public partial class ScannerViewModel : ObservableObject
     private readonly IDispatcherService _dispatcher;
     private readonly ILogger<ScannerViewModel> _logger;
     private readonly IWatchlistService _watchlistService;
+    private WatchlistViewModel? _watchlistViewModel;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
@@ -82,6 +83,30 @@ public partial class ScannerViewModel : ObservableObject
     [ObservableProperty] private string _errorMessage = "";
     [ObservableProperty] private bool _autoRefreshEnabled = false;
     [ObservableProperty] private int _refreshIntervalSeconds = 60; // default 60
+
+    // View switching properties
+    [ObservableProperty] private bool _isInScannerView = true;
+    [ObservableProperty] private bool _isInWatchlistView = false;
+
+    // Computed property for filter panel visibility
+    public bool ShowFiltersPanel => IsInScannerView;
+
+    // Expose watchlist ViewModel for binding
+    public WatchlistViewModel? WatchlistViewModel => _watchlistViewModel;
+
+    // Property changed handler for view switching
+    partial void OnIsInWatchlistViewChanged(bool value)
+    {
+        _logger.LogInformation("IsInWatchlistView changed to: {Value}, WatchlistViewModel is null: {IsNull}", 
+            value, _watchlistViewModel == null);
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+    }
+
+    partial void OnIsInScannerViewChanged(bool value)
+    {
+        _logger.LogInformation("IsInScannerView changed to: {Value}", value);
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+    }
 
     // Options for pickers
 
@@ -672,14 +697,68 @@ public partial class ScannerViewModel : ObservableObject
         });
 
     /// <summary>
-    /// Opens the watchlist window.
+    /// Switches to the scanner view.
     /// </summary>
     [RelayCommand]
-    private void OpenWatchlist()
+    private void SwitchToScanner()
     {
-        // The actual window opening will be handled in the code-behind
-        // because Window management is platform-specific
-        _logger.LogInformation("OpenWatchlist command triggered");
+        IsInScannerView = true;
+        IsInWatchlistView = false;
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+        _logger.LogInformation("Switched to Scanner view");
+    }
+
+    /// <summary>
+    /// Switches to the watchlist view.
+    /// </summary>
+    [RelayCommand]
+    private void SwitchToWatchlist()
+    {
+        IsInScannerView = false;
+        IsInWatchlistView = true;
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+
+        // Initialize watchlist ViewModel if not already done
+        if (_watchlistViewModel == null)
+        {
+            InitializeWatchlistView();
+        }
+
+        _logger.LogInformation("Switched to Watchlist view");
+    }
+
+    /// <summary>
+    /// Initializes the watchlist ViewModel on-demand.
+    /// </summary>
+    private void InitializeWatchlistView()
+    {
+        if (_watchlistViewModel != null) return;
+
+        _logger.LogInformation("Initializing watchlist view");
+
+        // Create watchlist ViewModel with proper dependencies
+        _watchlistViewModel = new WatchlistViewModel(
+            _watchlistService,
+            (IbkrGatewayService)_scanner,
+            _dispatcher,
+            Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole())
+                .CreateLogger<WatchlistViewModel>());
+
+        // Notify that WatchlistViewModel property changed
+        OnPropertyChanged(nameof(WatchlistViewModel));
+
+        // Initialize async (fire and forget with error logging)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _watchlistViewModel.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize watchlist view");
+            }
+        });
     }
 
     /// <summary>

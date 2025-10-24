@@ -81,11 +81,10 @@ namespace MarketScanner
 
             // ViewModels
             builder.Services.AddTransient<ScannerViewModel>();
-            builder.Services.AddTransient<WatchlistViewModel>();
+            // WatchlistViewModel is created on-demand by ScannerViewModel
 
             // Views
             builder.Services.AddTransient<ScannerPage>();
-            builder.Services.AddTransient<WatchlistWindow>();
 
             // Logging
             var logsDir = ResolveLogsDir();
