@@ -246,6 +246,18 @@ public partial class ScannerPage : ContentPage
             rowGrid.Children.Add(volumeLabel);
             rowGrid.Children.Add(averageVolumeLabel);
             
+            // Add double-tap gesture for adding to watchlist
+            var doubleTapGesture = new TapGestureRecognizer 
+            { 
+                NumberOfTapsRequired = 2 
+            };
+            // Bind command to the page's ViewModel
+            doubleTapGesture.SetBinding(TapGestureRecognizer.CommandProperty, 
+                new Binding("AddToWatchlistCommand", source: BindingContext));
+            // Bind parameter to the current row (the ScannerRowViewModel)
+            doubleTapGesture.SetBinding(TapGestureRecognizer.CommandParameterProperty, ".");
+            rowGrid.GestureRecognizers.Add(doubleTapGesture);
+            
             return rowGrid;
         });
         
@@ -281,5 +293,19 @@ public partial class ScannerPage : ContentPage
               ?.Invoke(vm, null);
     }
 
-
+    private void OnOpenWatchlistClicked(object sender, EventArgs e)
+    {
+        // Create watchlist window and open it
+        var watchlistWindow = Handler?.MauiContext?.Services.GetService<WatchlistWindow>();
+        if (watchlistWindow != null)
+        {
+            var window = new Window(watchlistWindow)
+            {
+                Title = "Watchlist",
+                Width = 1200,
+                Height = 800
+            };
+            Application.Current?.OpenWindow(window);
+        }
+    }
 }

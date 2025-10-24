@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using MarketScanner.Services;
 using MarketScanner.Services.Ibkr;
+using MarketScanner.Services.Impl;
 using MarketScanner.ViewModels;
 using MarketScanner.Views;
 using MarketScanner.Config;
@@ -43,6 +44,7 @@ namespace MarketScanner
             // Services
             builder.Services.AddSingleton<SettingsService>();
             builder.Services.AddSingleton<ColumnLayoutService>();
+            builder.Services.AddSingleton<IWatchlistService, WatchlistService>();
             
             // Register IBKR configuration
             builder.Services.Configure<IbkrConfig>(builder.Configuration.GetSection("Ibkr"));
@@ -79,9 +81,11 @@ namespace MarketScanner
 
             // ViewModels
             builder.Services.AddTransient<ScannerViewModel>();
+            builder.Services.AddTransient<WatchlistViewModel>();
 
             // Views
             builder.Services.AddTransient<ScannerPage>();
+            builder.Services.AddTransient<WatchlistWindow>();
 
             // Logging
             var logsDir = ResolveLogsDir();

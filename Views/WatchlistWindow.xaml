@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:MarketScanner.Converters"
+             x:Class="MarketScanner.Views.WatchlistWindow"
+             Title="Watchlist"
+             BackgroundColor="{StaticResource BackgroundDark}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:ChangeToColorConverter x:Key="ChangeToColorConverter"/>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*" 
+          Padding="10"
+          BackgroundColor="{StaticResource BackgroundDark}">
+
+        <!-- Top Bar: Watchlist Selector + Controls -->
+        <Grid Grid.Row="0" 
+              ColumnDefinitions="*,Auto,Auto,Auto"
+              Padding="0,0,0,10"
+              BackgroundColor="{StaticResource SurfaceDark}"
+              ColumnSpacing="10">
+
+            <!-- Watchlist Picker -->
+            <Picker Grid.Column="0"
+                    ItemsSource="{Binding Watchlists}"
+                    SelectedItem="{Binding SelectedWatchlist}"
+                    ItemDisplayBinding="{Binding Name}"
+                    TextColor="{StaticResource OnSurfaceDark}"
+                    BackgroundColor="{StaticResource BackgroundDark}"
+                    Title="Select Watchlist"
+                    Margin="5"/>
+
+            <!-- New Watchlist Button -->
+            <Button Grid.Column="1"
+                    Text="+ New"
+                    Command="{Binding CreateWatchlistCommand}"
+                    BackgroundColor="{StaticResource PrimaryDark}"
+                    TextColor="{StaticResource OnPrimaryDark}"
+                    Padding="10,5"
+                    CornerRadius="4"/>
+
+            <!-- Refresh Button -->
+            <Button Grid.Column="2"
+                    Text="Refresh"
+                    Command="{Binding RefreshWatchlistCommand}"
+                    BackgroundColor="{StaticResource PrimaryDark}"
+                    TextColor="{StaticResource OnPrimaryDark}"
+                    Padding="10,5"
+                    CornerRadius="4"/>
+
+            <!-- Delete Watchlist Button -->
+            <Button Grid.Column="3"
+                    Text="Delete"
+                    Command="{Binding DeleteWatchlistCommand}"
+                    CommandParameter="{Binding SelectedWatchlist}"
+                    BackgroundColor="{StaticResource ErrorDark}"
+                    TextColor="{StaticResource OnErrorDark}"
+                    Padding="10,5"
+                    CornerRadius="4"
+                    IsEnabled="{Binding SelectedWatchlist, Converter={StaticResource StringToBoolConverter}}"/>
+        </Grid>
+
+        <!-- Watchlist Grid -->
+        <Grid Grid.Row="1"
+              RowDefinitions="Auto,*"
+              BackgroundColor="{StaticResource BackgroundDark}">
+
+            <!-- Header -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="100,150,80,80,80,80,120,120"
+                  BackgroundColor="{StaticResource SurfaceDark}"
+                  HeightRequest="40"
+                  Padding="5,0">
+
+                <Label Grid.Column="0" Text="Symbol" Style="{StaticResource HeaderLabel}" HorizontalOptions="Start"/>
+                <Label Grid.Column="1" Text="Company" Style="{StaticResource HeaderLabel}" HorizontalOptions="Start"/>
+                <Label Grid.Column="2" Text="Change %" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="3" Text="Change" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="4" Text="Price" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="5" Text="Rel Vol" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="6" Text="Volume" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="7" Text="Avg Volume" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+            </Grid>
+
+            <!-- Data Rows -->
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding WatchlistItems}"
+                            BackgroundColor="#1a1a1a"
+                            SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="100,150,80,80,80,80,120,120"
+                              BackgroundColor="#1a1a1a"
+                              HeightRequest="32"
+                              Padding="5,0">
+
+                            <!-- Right-click context menu -->
+                            <FlyoutBase.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="Remove from Watchlist"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveFromWatchlistCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                </MenuFlyout>
+                            </FlyoutBase.ContextFlyout>
+
+                            <!-- Data cells -->
+                            <Label Grid.Column="0" Text="{Binding Symbol}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Start"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="1" Text="{Binding Company}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Start"
+                                   LineBreakMode="TailTruncation"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="2" 
+                                   Text="{Binding ChangePercent, StringFormat='{0:+#0.00;-#0.00;0.00}%'}" 
+                                   TextColor="{Binding ChangePercent, Converter={StaticResource ChangeToColorConverter}}"
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="3" 
+                                   Text="{Binding Change, StringFormat='{0:+#0.00;-#0.00;0.00}'}" 
+                                   TextColor="{Binding Change, Converter={StaticResource ChangeToColorConverter}}"
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="4" 
+                                   Text="{Binding LastPrice, StringFormat='{0:C2}'}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="5" 
+                                   Text="{Binding RelativeVolume, StringFormat='{0:0.0}x'}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="6" 
+                                   Text="{Binding Volume, StringFormat='{0:N0}'}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="7" 
+                                   Text="{Binding DisplayAvgVolume}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.EmptyView>
+                    <StackLayout VerticalOptions="CenterAndExpand" HorizontalOptions="CenterAndExpand">
+                        <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                           IsVisible="{Binding IsLoading}"
+                                           Color="{StaticResource PrimaryDark}"/>
+                        <Label Text="No symbols in watchlist. Double-click rows in scanner to add."
+                               IsVisible="{Binding IsLoading}"
+                               TextColor="{StaticResource OnSurfaceVariantDark}"
+                               HorizontalOptions="Center"
+                               Margin="0,10,0,0"/>
+                    </StackLayout>
+                </CollectionView.EmptyView>
+            </CollectionView>
+        </Grid>
+
+        <!-- Error Message -->
+        <Label Grid.Row="1"
+               Text="{Binding ErrorMessage}"
+               IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
+               TextColor="{StaticResource ErrorDark}"
+               VerticalOptions="End"
+               HorizontalOptions="Center"
+               Padding="10"
+               BackgroundColor="{StaticResource SurfaceDark}"/>
+    </Grid>
+</ContentPage>
+

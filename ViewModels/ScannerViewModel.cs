@@ -19,6 +19,7 @@ public partial class ScannerViewModel : ObservableObject
     private readonly IScanner _scanner;
     private readonly IDispatcherService _dispatcher;
     private readonly ILogger<ScannerViewModel> _logger;
+    private readonly IWatchlistService _watchlistService;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
@@ -120,11 +121,12 @@ public partial class ScannerViewModel : ObservableObject
         }
     }
 
-    public ScannerViewModel(IScanner scanner, IDispatcherService dispatcher, ILogger<ScannerViewModel> logger)
+    public ScannerViewModel(IScanner scanner, IDispatcherService dispatcher, ILogger<ScannerViewModel> logger, IWatchlistService watchlistService)
     {
         _scanner = scanner;
         _dispatcher = dispatcher;
         _logger = logger;
+        _watchlistService = watchlistService;
 
         // Setup batch timer for ultra-smooth updates (60 FPS) FIRST
         _batchTimer = new System.Timers.Timer(BatchIntervalMs);
@@ -668,6 +670,66 @@ public partial class ScannerViewModel : ObservableObject
             // Stop auto-refresh timer when resetting filters
             await StopAutoRefreshAsync();
         });
+
+    /// <summary>
+    /// Opens the watchlist window.
+    /// </summary>
+    [RelayCommand]
+    private void OpenWatchlist()
+    {
+        // The actual window opening will be handled in the code-behind
+        // because Window management is platform-specific
+        _logger.LogInformation("OpenWatchlist command triggered");
+    }
+
+    /// <summary>
+    /// Adds the clicked row and all rows below it to a watchlist.
+    /// Shows a picker dialog to select which watchlist to add to.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddToWatchlistAsync(ScannerRowViewModel clickedRow)
+    {
+        try
+        {
+            // Find index of clicked row in ShownData
+            var index = ScannerItems.IndexOf(clickedRow);
+            if (index < 0)
+            {
+                _logger.LogWarning("Clicked row not found in ScannerItems");
+                return;
+            }
+
+            // Get clicked row + everything below it
+            var symbolsToAdd = ScannerItems.Skip(index).Select(r => r.Symbol).ToList();
+            _logger.LogInformation("User double-clicked {Symbol} at index {Index}, adding {Count} symbols to watchlist",
+                clickedRow.Symbol, index, symbolsToAdd.Count);
+
+            // Get all watchlists
+            await _watchlistService.InitializeAsync();
+            var watchlists = await _watchlistService.GetAllWatchlistsAsync();
+
+            // If no watchlists exist, create a default one
+            if (watchlists.Count == 0)
+            {
+                _logger.LogInformation("No watchlists found, creating default watchlist");
+                var defaultWatchlist = await _watchlistService.CreateWatchlistAsync("Default");
+                watchlists.Add(defaultWatchlist);
+            }
+
+            // For now, just add to the first watchlist (we'll add picker dialog later)
+            var targetWatchlist = watchlists[0];
+            await _watchlistService.AddItemsAsync(targetWatchlist.Id, symbolsToAdd);
+
+            _logger.LogInformation("Added {Count} symbols to watchlist '{WatchlistName}'",
+                symbolsToAdd.Count, targetWatchlist.Name);
+
+            // TODO: Show toast notification to user
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add to watchlist");
+        }
+    }
 
     public void Dispose()
     {
