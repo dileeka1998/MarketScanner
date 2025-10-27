@@ -30,16 +30,14 @@
         <Grid ColumnDefinitions="*,320,50"
               BackgroundColor="{StaticResource BackgroundDark}">
 
-            <!-- Content Area: Scanner or Watchlist -->
-            <Grid x:Name="ContentArea" Grid.Column="0">
+            <!-- Scanner View -->
+            <Grid x:Name="ScannerContent" Grid.Column="0" IsVisible="{Binding IsInScannerView}">
                 
-                <!-- Scanner View -->
                 <ScrollView x:Name="TableScroll"
                             Orientation="Horizontal"
                             HorizontalScrollBarVisibility="Always"
                             BackgroundColor="{StaticResource BackgroundDark}"
-                            Margin="0,0,8,0"
-                            IsVisible="{Binding IsInScannerView}">
+                            Margin="0,0,8,0">
 
                 <Grid x:Name="TableRoot"
                       BackgroundColor="{StaticResource BackgroundDark}"
@@ -259,13 +257,13 @@
                     </CollectionView>
                 </Grid>
             </ScrollView>
-
-                <!-- Watchlist View -->
-                <Grid IsVisible="{Binding IsInWatchlistView}">
-                    <local:WatchlistContentView 
-                        BindingContext="{Binding WatchlistViewModel}" />
-                </Grid>
                 
+            </Grid>
+
+            <!-- Watchlist View (spans columns 0 and 1) -->
+            <Grid Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsInWatchlistView}">
+                <local:WatchlistContentView 
+                    BindingContext="{Binding WatchlistViewModel}" />
             </Grid>
 
             <!-- Right Panel: Filters -->
