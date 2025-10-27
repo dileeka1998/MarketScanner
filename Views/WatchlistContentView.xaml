@@ -10,6 +10,7 @@
             <converters:StringToBoolConverter x:Key="StringToBoolConverter"/>
             <converters:BoolToAccentColorConverter x:Key="BoolToAccentConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:IsSelectedWatchlistConverter x:Key="IsSelectedWatchlistConverter"/>
         </ResourceDictionary>
     </ContentView.Resources>
 
@@ -33,10 +34,25 @@
                     <BindableLayout.ItemTemplate>
                         <DataTemplate>
                             <Border Padding="12,6"
-                                    Margin="2,0"
-                                    StrokeThickness="1"
-                                    Stroke="{StaticResource BorderDark}"
-                                    BackgroundColor="{StaticResource SurfaceVariantDark}">
+                                    Margin="2,0">
+                                <Border.Stroke>
+                                    <MultiBinding Converter="{StaticResource IsSelectedWatchlistConverter}" ConverterParameter="Stroke">
+                                        <Binding Path="." />
+                                        <Binding Path="BindingContext.SelectedWatchlist" Source="{x:Reference WatchlistRoot}" />
+                                    </MultiBinding>
+                                </Border.Stroke>
+                                <Border.BackgroundColor>
+                                    <MultiBinding Converter="{StaticResource IsSelectedWatchlistConverter}" ConverterParameter="Background">
+                                        <Binding Path="." />
+                                        <Binding Path="BindingContext.SelectedWatchlist" Source="{x:Reference WatchlistRoot}" />
+                                    </MultiBinding>
+                                </Border.BackgroundColor>
+                                <Border.StrokeThickness>
+                                    <MultiBinding Converter="{StaticResource IsSelectedWatchlistConverter}" ConverterParameter="StrokeThickness">
+                                        <Binding Path="." />
+                                        <Binding Path="BindingContext.SelectedWatchlist" Source="{x:Reference WatchlistRoot}" />
+                                    </MultiBinding>
+                                </Border.StrokeThickness>
                                 
                                 <HorizontalStackLayout Spacing="8">
                                     <!-- Tab Name -->

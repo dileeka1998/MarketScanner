@@ -78,10 +78,10 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
                 Watchlists.Add(w);
             }
 
-            // Select first watchlist if available
+            // Select last (most recent) watchlist if available
             if (Watchlists.Count > 0)
             {
-                SelectedWatchlist = Watchlists[0];
+                SelectedWatchlist = Watchlists[Watchlists.Count - 1];
             }
 
             _logger.LogInformation("Initialized watchlist window with {Count} watchlists", Watchlists.Count);
