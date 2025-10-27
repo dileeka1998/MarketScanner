@@ -30,6 +30,9 @@ public class WatchlistItem
     [MaxLength(20), NotNull, Indexed]
     public string Symbol { get; set; } = string.Empty;
 
+    [MaxLength(200)]
+    public string? Company { get; set; }
+
     [NotNull]
     public int DisplayOrder { get; set; }
 

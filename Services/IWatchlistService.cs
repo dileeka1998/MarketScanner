@@ -10,7 +10,7 @@ public interface IWatchlistService
     Task<bool> RenameWatchlistAsync(int watchlistId, string newName);
     Task<bool> DeleteWatchlistAsync(int watchlistId);
     Task<List<WatchlistItem>> GetWatchlistItemsAsync(int watchlistId);
-    Task AddItemsAsync(int watchlistId, List<string> symbols);
+    Task AddItemsAsync(int watchlistId, List<(string Symbol, string Company)> symbolsAndCompanies);
     Task RemoveItemAsync(int watchlistId, string symbol);
     Task ReorderItemsAsync(int watchlistId, List<string> orderedSymbols);
 }

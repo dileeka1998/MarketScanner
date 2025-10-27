@@ -105,7 +105,7 @@ public class WatchlistService : IWatchlistService
             .ToListAsync();
     }
 
-    public async Task AddItemsAsync(int watchlistId, List<string> symbols)
+    public async Task AddItemsAsync(int watchlistId, List<(string Symbol, string Company)> symbolsAndCompanies)
     {
         await InitializeAsync();
 
@@ -115,9 +115,10 @@ public class WatchlistService : IWatchlistService
             watchlistId);
 
         var items = new List<WatchlistItem>();
-        for (int i = 0; i < symbols.Count; i++)
+        for (int i = 0; i < symbolsAndCompanies.Count; i++)
         {
-            var symbol = symbols[i]; // Extract to local variable for SQLite-net compatibility
+            var symbol = symbolsAndCompanies[i].Symbol;
+            var company = symbolsAndCompanies[i].Company; // Get company name
             
             // Skip if symbol already exists in this watchlist
             var existing = await _database.Table<WatchlistItem>()
@@ -134,6 +135,7 @@ public class WatchlistService : IWatchlistService
             {
                 WatchlistId = watchlistId,
                 Symbol = symbol,
+                Company = company, // Store company name
                 DisplayOrder = maxOrder + i + 1,
                 AddedAt = DateTime.UtcNow
             });

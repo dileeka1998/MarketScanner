@@ -813,8 +813,8 @@ public partial class ScannerViewModel : ObservableObject
     {
         try
         {
-            // Get ALL visible stocks (not just clicked + below)
-            var symbolsToAdd = ScannerItems.Select(r => r.Symbol).ToList();
+            // Get ALL visible stocks with their company names
+            var symbolsToAdd = ScannerItems.Select(r => (r.Symbol, r.Company)).ToList();
             
             _logger.LogInformation("User double-clicked {Symbol}, adding ALL {Count} visible symbols to watchlist",
                 clickedRow.Symbol, symbolsToAdd.Count);
@@ -825,7 +825,7 @@ public partial class ScannerViewModel : ObservableObject
             // Create watchlist with auto-generated name
             var newWatchlist = await _watchlistService.CreateWatchlistAsync(newName);
             
-            // Add all visible stocks
+            // Add all visible stocks with company names
             await _watchlistService.AddItemsAsync(newWatchlist.Id, symbolsToAdd);
 
             _logger.LogInformation("Created watchlist '{Name}' with {Count} symbols",
