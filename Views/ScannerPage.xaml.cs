@@ -269,6 +269,9 @@ public partial class ScannerPage : ContentPage
         base.OnAppearing();
         if (BindingContext is ViewModels.ScannerViewModel vm)
         {
+            // Pass page title to ViewModel for dynamic watchlist naming
+            vm.SetPageTitle(this.Title);
+            
             // Load refresh preferences on first appearance
             vm.LoadRefreshPrefs();
             

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MarketScanner.Views.Dialogs.InputDialog"
+             Title="Create Watchlist"
+             BackgroundColor="{StaticResource BackgroundDark}">
+    
+    <VerticalStackLayout Padding="20" Spacing="20" VerticalOptions="Center">
+        <Label Text="Enter watchlist name:" 
+               TextColor="{StaticResource OnSurfaceDark}"
+               FontSize="16"/>
+        
+        <Entry x:Name="InputEntry"
+               Placeholder="Watchlist name"
+               TextColor="{StaticResource OnSurfaceDark}"
+               BackgroundColor="{StaticResource SurfaceDark}"
+               FontSize="14"/>
+        
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Button Grid.Column="0" 
+                    Text="Cancel" 
+                    Clicked="OnCancelClicked"
+                    BackgroundColor="{StaticResource SurfaceDark}"
+                    TextColor="{StaticResource OnSurfaceDark}"/>
+            
+            <Button Grid.Column="1" 
+                    Text="OK" 
+                    Clicked="OnOkClicked"
+                    BackgroundColor="{StaticResource PrimaryDark}"
+                    TextColor="{StaticResource TextOnAccent}"/>
+        </Grid>
+    </VerticalStackLayout>
+</ContentPage>
+

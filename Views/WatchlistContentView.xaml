@@ -8,58 +8,93 @@
         <ResourceDictionary>
             <converters:ChangeToColorConverter x:Key="ChangeToColorConverter"/>
             <converters:StringToBoolConverter x:Key="StringToBoolConverter"/>
+            <converters:BoolToAccentColorConverter x:Key="BoolToAccentConverter"/>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
         </ResourceDictionary>
     </ContentView.Resources>
 
-    <Grid RowDefinitions="Auto,*" 
+    <Grid x:Name="WatchlistRoot"
+          RowDefinitions="Auto,*" 
           Padding="10"
           BackgroundColor="{StaticResource BackgroundDark}">
 
-        <!-- Top Bar: Watchlist Selector + Controls -->
+        <!-- Tab Bar -->
         <Grid Grid.Row="0" 
-              ColumnDefinitions="*,Auto,Auto,Auto"
+              ColumnDefinitions="*,Auto"
               Padding="0,0,0,10"
               BackgroundColor="{StaticResource SurfaceDark}"
               ColumnSpacing="10">
-
-            <!-- Watchlist Picker -->
-            <Picker Grid.Column="0"
-                    ItemsSource="{Binding Watchlists}"
-                    SelectedItem="{Binding SelectedWatchlist}"
-                    ItemDisplayBinding="{Binding Name}"
-                    TextColor="{StaticResource OnSurfaceDark}"
-                    BackgroundColor="{StaticResource BackgroundDark}"
-                    Title="Select Watchlist"
-                    Margin="5"/>
-
-            <!-- New Watchlist Button -->
+            
+            <!-- Watchlist Tabs (Horizontal ScrollView) -->
+            <ScrollView Grid.Column="0" 
+                        Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Always">
+                <HorizontalStackLayout Spacing="2" Padding="5" BindableLayout.ItemsSource="{Binding Watchlists}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="12,6"
+                                    Margin="2,0"
+                                    StrokeThickness="1"
+                                    Stroke="{StaticResource BorderDark}"
+                                    BackgroundColor="{StaticResource SurfaceVariantDark}">
+                                
+                                <HorizontalStackLayout Spacing="8">
+                                    <!-- Tab Name -->
+                                    <Label Text="{Binding Name}" 
+                                           TextColor="{StaticResource OnSurfaceDark}"
+                                           FontSize="13"
+                                           VerticalOptions="Center"/>
+                                    
+                                    <!-- Close Button (×) -->
+                                    <Button Text="×" 
+                                            FontSize="16"
+                                            Command="{Binding BindingContext.DeleteWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                            CommandParameter="{Binding .}"
+                                            BackgroundColor="Transparent"
+                                            TextColor="{StaticResource OnSurfaceDark}"
+                                            WidthRequest="16"
+                                            HeightRequest="16"
+                                            Padding="0"
+                                            Margin="0"/>
+                                </HorizontalStackLayout>
+                                
+                                <!-- Tap to select tab -->
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer 
+                                        Command="{Binding BindingContext.SelectWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                        CommandParameter="{Binding .}"/>
+                                </Border.GestureRecognizers>
+                                
+                                <!-- Right-click context menu (Rename - stubbed for now) -->
+                                <FlyoutBase.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Rename (Coming Soon)" 
+                                                        Command="{Binding BindingContext.RenameWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                                        CommandParameter="{Binding .}"
+                                                        IsEnabled="False"/>
+                                        <MenuFlyoutItem Text="Delete" 
+                                                        Command="{Binding BindingContext.DeleteWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                                        CommandParameter="{Binding .}"/>
+                                    </MenuFlyout>
+                                </FlyoutBase.ContextFlyout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </HorizontalStackLayout>
+            </ScrollView>
+            
+            <!-- New Watchlist Button (+) -->
             <Button Grid.Column="1"
-                    Text="+ New"
+                    Text="+"
                     Command="{Binding CreateWatchlistCommand}"
                     BackgroundColor="{StaticResource PrimaryDark}"
                     TextColor="{StaticResource TextOnAccent}"
-                    Padding="10,5"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    WidthRequest="40"
+                    HeightRequest="32"
+                    Padding="0"
                     CornerRadius="4"/>
-
-            <!-- Refresh Button -->
-            <Button Grid.Column="2"
-                    Text="Refresh"
-                    Command="{Binding RefreshWatchlistCommand}"
-                    BackgroundColor="{StaticResource PrimaryDark}"
-                    TextColor="{StaticResource TextOnAccent}"
-                    Padding="10,5"
-                    CornerRadius="4"/>
-
-            <!-- Delete Watchlist Button -->
-            <Button Grid.Column="3"
-                    Text="Delete"
-                    Command="{Binding DeleteWatchlistCommand}"
-                    CommandParameter="{Binding SelectedWatchlist}"
-                    BackgroundColor="{StaticResource ErrorColor}"
-                    TextColor="{StaticResource TextOnAccent}"
-                    Padding="10,5"
-                    CornerRadius="4"
-                    IsEnabled="{Binding SelectedWatchlist, Converter={StaticResource StringToBoolConverter}}"/>
         </Grid>
 
         <!-- Watchlist Grid -->
@@ -101,7 +136,7 @@
                             <FlyoutBase.ContextFlyout>
                                 <MenuFlyout>
                                     <MenuFlyoutItem Text="Remove from Watchlist"
-                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentView}}, Path=BindingContext.RemoveFromWatchlistCommand}"
+                                                    Command="{Binding BindingContext.RemoveFromWatchlistCommand, Source={x:Reference WatchlistRoot}}"
                                                     CommandParameter="{Binding .}" />
                                 </MenuFlyout>
                             </FlyoutBase.ContextFlyout>
@@ -185,7 +220,7 @@
                                            IsVisible="{Binding IsLoading}"
                                            Color="{StaticResource PrimaryDark}"/>
                         <Label Text="No symbols in watchlist. Double-click rows in scanner to add."
-                               IsVisible="{Binding IsLoading}"
+                               IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"
                                TextColor="{StaticResource OnSurfaceVariantDark}"
                                HorizontalOptions="Center"
                                Margin="0,10,0,0"/>

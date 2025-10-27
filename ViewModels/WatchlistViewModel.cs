@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using MarketScanner.Models;
 using MarketScanner.Services;
 using MarketScanner.Services.Ibkr;
+using MarketScanner.Views.Dialogs;
 using Microsoft.Extensions.Logging;
 using System.Reactive.Linq;
 
@@ -162,20 +163,59 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
     {
         try
         {
-            // TODO: Show dialog to get watchlist name from user
-            var name = $"Watchlist {Watchlists.Count + 1}";
+            // Get base name from app title (Market Scanner by default)
+            var baseName = "Market Scanner";
+            
+            // Suggest next available name
+            var existingNames = Watchlists.Select(w => w.Name).ToHashSet();
+            var number = 1;
+            string suggestedName;
+            
+            do
+            {
+                suggestedName = $"{baseName} {number}";
+                number++;
+            } while (existingNames.Contains(suggestedName));
 
+            // Show input dialog
+            var dialog = new InputDialog(suggestedName);
+            await Application.Current!.MainPage!.Navigation.PushModalAsync(dialog);
+            
+            var name = await dialog.GetInputAsync();
+            
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                _logger.LogInformation("Watchlist creation cancelled");
+                return;
+            }
+
+            // Create empty watchlist with user-provided name
             var newWatchlist = await _watchlistService.CreateWatchlistAsync(name);
             Watchlists.Add(newWatchlist);
             SelectedWatchlist = newWatchlist;
 
-            _logger.LogInformation("Created new watchlist '{Name}'", name);
+            _logger.LogInformation("Created empty watchlist '{Name}'", name);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create watchlist");
             ErrorMessage = $"Failed to create watchlist: {ex.Message}";
         }
+    }
+
+    [RelayCommand]
+    private void SelectWatchlist(Watchlist watchlist)
+    {
+        SelectedWatchlist = watchlist;
+    }
+
+    [RelayCommand]
+    private async Task RenameWatchlistAsync(Watchlist watchlist)
+    {
+        // TODO: Implement with input dialog later
+        _logger.LogInformation("Rename functionality not yet implemented for watchlist {Name}", watchlist.Name);
+        // Future: Show input dialog, get new name, call _watchlistService.RenameWatchlistAsync()
+        await Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -221,15 +261,6 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
             _logger.LogError(ex, "Failed to remove symbol from watchlist");
             ErrorMessage = $"Failed to remove symbol: {ex.Message}";
         }
-    }
-
-    [RelayCommand]
-    private async Task RefreshWatchlistAsync()
-    {
-        if (SelectedWatchlist == null)
-            return;
-
-        await LoadWatchlistItemsAsync(SelectedWatchlist.Id);
     }
 
     public void Dispose()

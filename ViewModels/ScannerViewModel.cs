@@ -25,6 +25,9 @@ public partial class ScannerViewModel : ObservableObject
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
     private bool _disposed = false;
+    
+    // Store page title for dynamic watchlist naming (set from code-behind)
+    private string _pageTitle = "Market Scanner"; // fallback default
 
     // Track previous scan-level filters for hybrid filtering
     private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN)? _previousScanFilters;
@@ -585,6 +588,15 @@ public partial class ScannerViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Set page title for dynamic watchlist naming
+    /// </summary>
+    public void SetPageTitle(string title)
+    {
+        _pageTitle = title;
+        _logger.LogDebug("Page title set to: {Title}", title);
+    }
+
+    /// <summary>
     /// Load refresh preferences from storage
     /// </summary>
     public void LoadRefreshPrefs()
@@ -714,15 +726,26 @@ public partial class ScannerViewModel : ObservableObject
     [RelayCommand]
     private void SwitchToWatchlist()
     {
-        IsInScannerView = false;
-        IsInWatchlistView = true;
-        OnPropertyChanged(nameof(ShowFiltersPanel));
-
-        // Initialize watchlist ViewModel if not already done
+        _logger.LogDebug("SwitchToWatchlist called, _watchlistViewModel is null: {IsNull}", _watchlistViewModel == null);
+        
+        // Initialize watchlist ViewModel BEFORE switching to ensure it exists
         if (_watchlistViewModel == null)
         {
+            _logger.LogDebug("Creating WatchlistViewModel...");
             InitializeWatchlistView();
+            _logger.LogDebug("WatchlistViewModel created");
         }
+
+        _logger.LogDebug("Setting IsInScannerView = false");
+        IsInScannerView = false;
+        _logger.LogDebug("IsInScannerView set to false");
+        
+        _logger.LogDebug("Setting IsInWatchlistView = true");
+        IsInWatchlistView = true;
+        _logger.LogDebug("IsInWatchlistView set to true");
+        
+        _logger.LogDebug("Calling OnPropertyChanged for ShowFiltersPanel");
+        OnPropertyChanged(nameof(ShowFiltersPanel));
 
         _logger.LogInformation("Switched to Watchlist view");
     }
@@ -734,9 +757,9 @@ public partial class ScannerViewModel : ObservableObject
     {
         if (_watchlistViewModel != null) return;
 
-        _logger.LogInformation("Initializing watchlist view");
+        _logger.LogDebug("Creating WatchlistViewModel on UI thread");
 
-        // Create watchlist ViewModel with proper dependencies
+        // ✅ Create ViewModel synchronously on UI thread (ready for binding)
         _watchlistViewModel = new WatchlistViewModel(
             _watchlistService,
             (IbkrGatewayService)_scanner,
@@ -744,63 +767,69 @@ public partial class ScannerViewModel : ObservableObject
             Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole())
                 .CreateLogger<WatchlistViewModel>());
 
-        // Notify that WatchlistViewModel property changed
+        _logger.LogDebug("WatchlistViewModel created, notifying property change");
         OnPropertyChanged(nameof(WatchlistViewModel));
 
-        // Initialize async (fire and forget with error logging)
-        _ = Task.Run(async () =>
+        // ✅ Initialize database async (fire-and-forget, no Task.Run wrapper)
+        _ = _watchlistViewModel.InitializeAsync().ContinueWith(t =>
         {
-            try
+            if (t.IsFaulted)
             {
-                await _watchlistViewModel.InitializeAsync();
+                _logger.LogError(t.Exception, "Failed to initialize watchlist database");
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Failed to initialize watchlist view");
+                _logger.LogDebug("WatchlistViewModel database initialized successfully");
             }
-        });
+        }, TaskScheduler.Default);
+
+        _logger.LogInformation("Watchlist view initialized, database loading in background");
     }
 
     /// <summary>
-    /// Adds the clicked row and all rows below it to a watchlist.
-    /// Shows a picker dialog to select which watchlist to add to.
+    /// Generate next available watchlist name using page title
     /// </summary>
+    private async Task<string> GenerateWatchlistNameAsync()
+    {
+        await _watchlistService.InitializeAsync();
+        var watchlists = await _watchlistService.GetAllWatchlistsAsync();
+        
+        var baseName = _pageTitle; // Uses page Title dynamically!
+        var existingNames = watchlists.Select(w => w.Name).ToHashSet();
+        var number = 1;
+        string newName;
+        
+        do
+        {
+            newName = $"{baseName} {number}";
+            number++;
+        } while (existingNames.Contains(newName));
+        
+        return newName;
+    }
+
     [RelayCommand]
     private async Task AddToWatchlistAsync(ScannerRowViewModel clickedRow)
     {
         try
         {
-            // Find index of clicked row in ShownData
-            var index = ScannerItems.IndexOf(clickedRow);
-            if (index < 0)
-            {
-                _logger.LogWarning("Clicked row not found in ScannerItems");
-                return;
-            }
+            // Get ALL visible stocks (not just clicked + below)
+            var symbolsToAdd = ScannerItems.Select(r => r.Symbol).ToList();
+            
+            _logger.LogInformation("User double-clicked {Symbol}, adding ALL {Count} visible symbols to watchlist",
+                clickedRow.Symbol, symbolsToAdd.Count);
 
-            // Get clicked row + everything below it
-            var symbolsToAdd = ScannerItems.Skip(index).Select(r => r.Symbol).ToList();
-            _logger.LogInformation("User double-clicked {Symbol} at index {Index}, adding {Count} symbols to watchlist",
-                clickedRow.Symbol, index, symbolsToAdd.Count);
+            // Generate watchlist name using page title
+            var newName = await GenerateWatchlistNameAsync();
 
-            // Get all watchlists
-            await _watchlistService.InitializeAsync();
-            var watchlists = await _watchlistService.GetAllWatchlistsAsync();
+            // Create watchlist with auto-generated name
+            var newWatchlist = await _watchlistService.CreateWatchlistAsync(newName);
+            
+            // Add all visible stocks
+            await _watchlistService.AddItemsAsync(newWatchlist.Id, symbolsToAdd);
 
-            // If no watchlists exist, create a default one
-            if (watchlists.Count == 0)
-            {
-                _logger.LogInformation("No watchlists found, creating default watchlist");
-                var defaultWatchlist = await _watchlistService.CreateWatchlistAsync("Default");
-                watchlists.Add(defaultWatchlist);
-            }
-
-            // For now, just add to the first watchlist (we'll add picker dialog later)
-            var targetWatchlist = watchlists[0];
-            await _watchlistService.AddItemsAsync(targetWatchlist.Id, symbolsToAdd);
-
-            _logger.LogInformation("Added {Count} symbols to watchlist '{WatchlistName}'",
-                symbolsToAdd.Count, targetWatchlist.Name);
+            _logger.LogInformation("Created watchlist '{Name}' with {Count} symbols",
+                newName, symbolsToAdd.Count);
 
             // TODO: Show toast notification to user
         }

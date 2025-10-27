@@ -117,21 +117,23 @@ public class WatchlistService : IWatchlistService
         var items = new List<WatchlistItem>();
         for (int i = 0; i < symbols.Count; i++)
         {
+            var symbol = symbols[i]; // Extract to local variable for SQLite-net compatibility
+            
             // Skip if symbol already exists in this watchlist
             var existing = await _database.Table<WatchlistItem>()
-                .Where(wi => wi.WatchlistId == watchlistId && wi.Symbol == symbols[i])
+                .Where(wi => wi.WatchlistId == watchlistId && wi.Symbol == symbol)
                 .CountAsync();
 
             if (existing > 0)
             {
-                _logger.LogDebug("Symbol {Symbol} already exists in watchlist {WatchlistId}, skipping", symbols[i], watchlistId);
+                _logger.LogDebug("Symbol {Symbol} already exists in watchlist {WatchlistId}, skipping", symbol, watchlistId);
                 continue;
             }
 
             items.Add(new WatchlistItem
             {
                 WatchlistId = watchlistId,
-                Symbol = symbols[i],
+                Symbol = symbol,
                 DisplayOrder = maxOrder + i + 1,
                 AddedAt = DateTime.UtcNow
             });
