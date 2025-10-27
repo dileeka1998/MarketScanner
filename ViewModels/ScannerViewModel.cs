@@ -240,9 +240,18 @@ public partial class ScannerViewModel : ObservableObject
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        if (IsRefreshing || IsLoading) return;
+        if (IsRefreshing || IsLoading || _disposed) return;
 
-        _cts?.Cancel();
+        try
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already disposed, ignore
+        }
+
         _cts = new CancellationTokenSource();
 
         // Clear state from previous scan to prevent data leakage
@@ -844,22 +853,64 @@ public partial class ScannerViewModel : ObservableObject
         _disposed = true;
         _snapshot = Array.Empty<ScannerRowViewModel>();
 
-        _cts?.Cancel();
-        _cts?.Dispose();
+        // Dispose with exception handling to prevent ObjectDisposedException
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _cts?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
 
         // Ensure proper disposal order for filter CTS
-        _filterCts?.Cancel();
-        Task.Delay(50).Wait();  // Give pending operations time to cancel
-        _filterCts?.Dispose();
+        try
+        {
+            _filterCts?.Cancel();
+            Task.Delay(50).Wait();  // Give pending operations time to cancel
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _filterCts?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
 
         // Stop batch timer
-        _batchTimer?.Stop();
-        _batchTimer?.Dispose();
+        try
+        {
+            _batchTimer?.Stop();
+            _batchTimer?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
 
-        _ = StopAutoRefreshAsync();
-        _autoCts?.Dispose();
-        _debounce.Dispose();
-        _priceDebouncer.Dispose();
+        try
+        {
+            _ = StopAutoRefreshAsync();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _autoCts?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _debounce.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _priceDebouncer.Dispose();
+        }
+        catch (ObjectDisposedException) { }
 
         // Stop scanner
         _ = Task.Run(async () => await _scanner.StopAsync());

@@ -223,7 +223,24 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
     {
         try
         {
-            // TODO: Show confirmation dialog
+            // Show confirmation dialog
+            if (Application.Current?.MainPage == null)
+            {
+                _logger.LogWarning("Cannot show confirmation dialog - MainPage is null");
+                return;
+            }
+
+            bool confirmed = await Application.Current.MainPage.DisplayAlert(
+                "Delete Watchlist",
+                $"Delete '{watchlist.Name}'?",
+                "Delete",
+                "Cancel");
+
+            if (!confirmed)
+            {
+                _logger.LogDebug("User cancelled deletion of watchlist '{Name}'", watchlist.Name);
+                return;
+            }
 
             await _watchlistService.DeleteWatchlistAsync(watchlist.Id);
             Watchlists.Remove(watchlist);
