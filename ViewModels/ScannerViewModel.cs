@@ -26,8 +26,8 @@ public partial class ScannerViewModel : ObservableObject
     private int _applyEpoch; // NEW: prevents out-of-order commits
     private bool _disposed = false;
     
-    // Store page title for dynamic watchlist naming (set from code-behind)
-    private string _pageTitle = "Market Scanner"; // fallback default
+    // Store page title for dynamic watchlist naming and view title (set from code-behind and when switching views)
+    [ObservableProperty] private string _pageTitle = "Market Scanner"; // fallback default
 
     // Track previous scan-level filters for hybrid filtering
     private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN)? _previousScanFilters;
@@ -84,8 +84,8 @@ public partial class ScannerViewModel : ObservableObject
     [ObservableProperty] private bool _isRefreshing = false;
     [ObservableProperty] private bool _isLoading = false;
     [ObservableProperty] private string _errorMessage = "";
-    [ObservableProperty] private bool _autoRefreshEnabled = false;
-    [ObservableProperty] private int _refreshIntervalSeconds = 60; // default 60
+        [ObservableProperty] private bool _autoRefreshEnabled = false;
+        [ObservableProperty] private int _refreshIntervalSeconds = 60; // default 60
 
     // View switching properties
     [ObservableProperty] private bool _isInScannerView = true;
@@ -118,30 +118,30 @@ public partial class ScannerViewModel : ObservableObject
 
     private readonly Debounce _debounce = new(TimeSpan.FromMilliseconds(50)); // very responsive for production use
     private readonly Debounce _priceDebouncer = new(TimeSpan.FromMilliseconds(800)); // longer delay for price to prevent rescans on each keystroke
-
-    // Auto-refresh timer fields
-    private CancellationTokenSource? _autoCts;
-    private Task? _autoTask;
+        
+        // Auto-refresh timer fields
+        private CancellationTokenSource? _autoCts;
+        private Task? _autoTask;
 
     // Property change handlers - all use debounced filtering
-    partial void OnMinChangePercentTextChanged(string value) => DebouncedApply();
+        partial void OnMinChangePercentTextChanged(string value) => DebouncedApply();
     partial void OnVolumeMinTextChanged(string value) => DebouncedApply();
-
-    // Auto-refresh property change handlers
-    partial void OnRefreshIntervalSecondsChanged(int oldValue, int newValue)
-    {
-        // Persist selection
-        Preferences.Set("refresh.interval.seconds", newValue);
-        // If auto-refresh is on, restart quickly
-        RestartAutoRefreshTimerIfNeeded();
-    }
-
-    partial void OnAutoRefreshEnabledChanged(bool oldValue, bool newValue)
-    {
-        Preferences.Set("refresh.enabled", newValue);
-        if (newValue)
+        
+        // Auto-refresh property change handlers
+        partial void OnRefreshIntervalSecondsChanged(int oldValue, int newValue)
+        {
+            // Persist selection
+            Preferences.Set("refresh.interval.seconds", newValue);
+            // If auto-refresh is on, restart quickly
             RestartAutoRefreshTimerIfNeeded();
-        else
+        }
+
+        partial void OnAutoRefreshEnabledChanged(bool oldValue, bool newValue)
+        {
+            Preferences.Set("refresh.enabled", newValue);
+            if (newValue) 
+                RestartAutoRefreshTimerIfNeeded();
+            else 
         {
             // Stop auto-refresh immediately (synchronous cancellation)
             try { _autoCts?.Cancel(); } catch { }
@@ -173,10 +173,10 @@ public partial class ScannerViewModel : ObservableObject
                 _batchedTicks.Enqueue(tick);
             });
         }
-
-        // Subscribe to property changes for debounced filtering
-        PropertyChanged += (_, e) =>
-        {
+            
+            // Subscribe to property changes for debounced filtering
+            PropertyChanged += (_, e) =>
+            {
             // Auto-reset exchange to "any" when region changes to non-US to avoid IBKR mismatch errors
 
             {
@@ -192,21 +192,21 @@ public partial class ScannerViewModel : ObservableObject
                 _ = _priceDebouncer.ExecuteAsync(ApplyFiltersAsync);
             }
             else if (e.PropertyName?.StartsWith("Min") == true ||
-                e.PropertyName?.StartsWith("Max") == true ||
-                e.PropertyName?.StartsWith("Selected") == true ||
-                e.PropertyName?.StartsWith("TopN") == true ||
-                e.PropertyName?.StartsWith("Exchange") == true)
-            {
-                DebouncedApply();
-            }
-        };
-
-        // Load refresh preferences after initialization
-        LoadRefreshPrefs();
-
-        // Wire auto-refresh property changes
-        WireAutoRefresh();
-    }
+                    e.PropertyName?.StartsWith("Max") == true ||
+                    e.PropertyName?.StartsWith("Selected") == true ||
+                    e.PropertyName?.StartsWith("TopN") == true ||
+                    e.PropertyName?.StartsWith("Exchange") == true)
+                {
+                    DebouncedApply();
+                }
+            };
+            
+            // Load refresh preferences after initialization
+            LoadRefreshPrefs();
+            
+            // Wire auto-refresh property changes
+            WireAutoRefresh();
+        }
 
     private void SetProductionDefaults()
     {
@@ -241,10 +241,10 @@ public partial class ScannerViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         if (IsRefreshing || IsLoading || _disposed) return;
-
+        
         try
         {
-            _cts?.Cancel();
+        _cts?.Cancel();
             _cts?.Dispose();
         }
         catch (ObjectDisposedException)
@@ -264,7 +264,7 @@ public partial class ScannerViewModel : ObservableObject
             IsRefreshing = true;
             ErrorMessage = "";
             DebugStatus = "Loading data...";
-
+            
             // Start batch timer now that we're refreshing (UI should be ready)
             StartBatchTimer();
 
@@ -335,8 +335,8 @@ public partial class ScannerViewModel : ObservableObject
             ErrorMessage = ex.Message;
             DebugStatus = $"Error: {ex.Message}";
         }
-        finally
-        {
+        finally 
+        { 
             IsRefreshing = false;
             DebugStatus = $"ScannerItems: {ScannerItems.Count}";
             _logger.LogInformation("RefreshAsync completed: ScannerItems={ScannerItemsCount}", ScannerItems.Count);
@@ -601,38 +601,38 @@ public partial class ScannerViewModel : ObservableObject
     /// </summary>
     public void SetPageTitle(string title)
     {
-        _pageTitle = title;
+        PageTitle = title;
         _logger.LogDebug("Page title set to: {Title}", title);
     }
 
-    /// <summary>
-    /// Load refresh preferences from storage
-    /// </summary>
-    public void LoadRefreshPrefs()
-    {
-        RefreshIntervalSeconds = Preferences.Get("refresh.interval.seconds", 60);
-        AutoRefreshEnabled = Preferences.Get("refresh.enabled", false);
-    }
-
-    /// <summary>
-    /// Wire auto-refresh property changes to trigger refresh logic
-    /// </summary>
-    private void WireAutoRefresh()
-    {
-        PropertyChanged += (_, e) =>
+        /// <summary>
+        /// Load refresh preferences from storage
+        /// </summary>
+        public void LoadRefreshPrefs()
         {
-            if (e.PropertyName == nameof(AutoRefreshEnabled) || e.PropertyName == nameof(RefreshIntervalSeconds))
-            {
-                RestartAutoRefreshTimerIfNeeded();
-            }
-        };
-    }
+            RefreshIntervalSeconds = Preferences.Get("refresh.interval.seconds", 60);
+            AutoRefreshEnabled = Preferences.Get("refresh.enabled", false);
+        }
 
-    /// <summary>
-    /// Stop the auto-refresh timer
-    /// </summary>
-    public async Task StopAutoRefreshAsync()
-    {
+        /// <summary>
+        /// Wire auto-refresh property changes to trigger refresh logic
+        /// </summary>
+        private void WireAutoRefresh()
+        {
+            PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(AutoRefreshEnabled) || e.PropertyName == nameof(RefreshIntervalSeconds))
+                {
+                    RestartAutoRefreshTimerIfNeeded();
+                }
+            };
+        }
+
+        /// <summary>
+        /// Stop the auto-refresh timer
+        /// </summary>
+        public async Task StopAutoRefreshAsync()
+        {
         try
         {
             _autoCts?.Cancel();
@@ -641,22 +641,22 @@ public partial class ScannerViewModel : ObservableObject
         }
         catch { }
 
-        if (_autoTask != null)
-        {
-            try { await _autoTask; } catch { }
+            if (_autoTask != null)
+            {
+                try { await _autoTask; } catch { }
             _autoTask = null;
         }
-    }
+        }
 
-    /// <summary>
-    /// Restart the auto-refresh timer if enabled
-    /// </summary>
-    public void RestartAutoRefreshTimerIfNeeded()
-    {
-        _ = Task.Run(async () =>
+        /// <summary>
+        /// Restart the auto-refresh timer if enabled
+        /// </summary>
+        public void RestartAutoRefreshTimerIfNeeded()
         {
-            await StopAutoRefreshAsync();
-            if (!AutoRefreshEnabled) return;
+            _ = Task.Run(async () =>
+            {
+                await StopAutoRefreshAsync();
+                if (!AutoRefreshEnabled) return;
 
             var cts = new CancellationTokenSource();
             var token = cts.Token;  // Capture token BEFORE assigning to field
@@ -664,58 +664,58 @@ public partial class ScannerViewModel : ObservableObject
 
             // Use captured token (safe even if cts gets disposed)
             _autoTask = Task.Run(() => RunAutoRefreshLoopAsync(token));
-        });
-    }
-
-    /// <summary>
-    /// Run the auto-refresh loop with proper error handling
-    /// </summary>
-    private async Task RunAutoRefreshLoopAsync(CancellationToken ct)
-    {
-        // Start with immediate refresh
-        await RefreshAsync().ConfigureAwait(false);
-
-        while (!ct.IsCancellationRequested)
-        {
-            var delay = Math.Max(5, RefreshIntervalSeconds); // floor to 5s
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(delay), ct).ConfigureAwait(false);
-                if (!ct.IsCancellationRequested)
-                    await RefreshAsync().ConfigureAwait(false);
-            }
-            catch (TaskCanceledException) { }
+            });
         }
-    }
 
-    /// <summary>
-    /// Handle auto-refresh toggle
-    /// </summary>
-    public async Task OnAutoRefreshToggledAsync(bool isEnabled)
-    {
-        if (isEnabled)
-            RestartAutoRefreshTimerIfNeeded();
-        else
-            await StopAutoRefreshAsync();
-    }
-
-    private IRelayCommand? _resetFiltersCommand;
-    public IRelayCommand ResetFiltersCommand => _resetFiltersCommand ??=
-        new RelayCommand(async () =>
+        /// <summary>
+        /// Run the auto-refresh loop with proper error handling
+        /// </summary>
+        private async Task RunAutoRefreshLoopAsync(CancellationToken ct)
         {
+            // Start with immediate refresh
+            await RefreshAsync().ConfigureAwait(false);
+
+            while (!ct.IsCancellationRequested)
+            {
+                var delay = Math.Max(5, RefreshIntervalSeconds); // floor to 5s
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(delay), ct).ConfigureAwait(false);
+                    if (!ct.IsCancellationRequested)
+                        await RefreshAsync().ConfigureAwait(false);
+                }
+                catch (TaskCanceledException) { }
+            }
+        }
+
+        /// <summary>
+        /// Handle auto-refresh toggle
+        /// </summary>
+        public async Task OnAutoRefreshToggledAsync(bool isEnabled)
+        {
+            if (isEnabled)
+                RestartAutoRefreshTimerIfNeeded();
+            else
+                await StopAutoRefreshAsync();
+        }
+
+        private IRelayCommand? _resetFiltersCommand;
+        public IRelayCommand ResetFiltersCommand => _resetFiltersCommand ??=
+            new RelayCommand(async () =>
+            {
 
             Exchange = "us stocks";
             MinPriceText = "2";
             MaxPriceText = "20";
             VolumeMinText = "100000";
-            MinChangePercentText = "";
+                MinChangePercentText = "";
             TopN = 50;
 
-            await ApplyFiltersAsync();
+                await ApplyFiltersAsync();
 
-            // Stop auto-refresh timer when resetting filters
-            await StopAutoRefreshAsync();
-        });
+                // Stop auto-refresh timer when resetting filters
+                await StopAutoRefreshAsync();
+            });
 
     /// <summary>
     /// Switches to the scanner view.
@@ -725,6 +725,7 @@ public partial class ScannerViewModel : ObservableObject
     {
         IsInScannerView = true;
         IsInWatchlistView = false;
+        PageTitle = "Market Scanner";
         OnPropertyChanged(nameof(ShowFiltersPanel));
         _logger.LogInformation("Switched to Scanner view");
     }
@@ -752,6 +753,8 @@ public partial class ScannerViewModel : ObservableObject
         _logger.LogDebug("Setting IsInWatchlistView = true");
         IsInWatchlistView = true;
         _logger.LogDebug("IsInWatchlistView set to true");
+        
+        PageTitle = "Watchlists";
         
         _logger.LogDebug("Calling OnPropertyChanged for ShowFiltersPanel");
         OnPropertyChanged(nameof(ShowFiltersPanel));
@@ -803,7 +806,7 @@ public partial class ScannerViewModel : ObservableObject
         await _watchlistService.InitializeAsync();
         var watchlists = await _watchlistService.GetAllWatchlistsAsync();
         
-        var baseName = _pageTitle; // Uses page Title dynamically!
+        var baseName = PageTitle; // Uses page Title dynamically!
         var existingNames = watchlists.Select(w => w.Name).ToHashSet();
         var number = 1;
         string newName;
@@ -848,7 +851,7 @@ public partial class ScannerViewModel : ObservableObject
         }
     }
 
-    public void Dispose()
+        public void Dispose()
     {
         _disposed = true;
         _snapshot = Array.Empty<ScannerRowViewModel>();

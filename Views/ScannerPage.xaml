@@ -9,7 +9,7 @@
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:local="clr-namespace:MarketScanner.Views"
              x:Class="MarketScanner.Views.ScannerPage"
-             Title="Market Scanner"
+             Title="{Binding PageTitle}"
              BackgroundColor="{StaticResource BackgroundDark}">
 
     <ContentPage.Resources>
