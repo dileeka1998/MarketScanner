@@ -238,6 +238,73 @@
                HorizontalOptions="Center"
                Padding="10"
                BackgroundColor="{StaticResource SurfaceDark}"/>
+
+        <!-- Inline Watchlist Name Input Popup (Floating Overlay) -->
+        <Grid Grid.RowSpan="2"
+              IsVisible="{Binding IsCreatingWatchlist}"
+              BackgroundColor="#80000000"
+              InputTransparent="False"
+              Padding="10">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CancelCreateWatchlistCommand}"/>
+            </Grid.GestureRecognizers>
+            
+            <!-- Popup Box (positioned top-right near + button) -->
+            <Border HorizontalOptions="End"
+                    VerticalOptions="Start"
+                    Margin="0,40,0,0"
+                    Padding="15"
+                    BackgroundColor="{StaticResource SurfaceDark}"
+                    Stroke="{StaticResource PrimaryDark}"
+                    StrokeThickness="2"
+                    WidthRequest="300">
+                
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer/>
+                </Border.GestureRecognizers>
+                
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="New Watchlist Name"
+                           FontSize="13"
+                           TextColor="{StaticResource OnSurfaceDark}"
+                           FontAttributes="Bold"/>
+                    
+                    <Entry x:Name="WatchlistNameEntry"
+                           Text="{Binding NewWatchlistName}"
+                           Placeholder="Enter name..."
+                           TextColor="{StaticResource OnSurfaceDark}"
+                           BackgroundColor="{StaticResource BackgroundDark}"
+                           FontSize="13"
+                           ReturnCommand="{Binding ConfirmCreateWatchlistCommand}"/>
+                    
+                    <!-- Error Message -->
+                    <Label Text="{Binding WatchlistNameError}"
+                           TextColor="{StaticResource ErrorColor}"
+                           FontSize="11"
+                           IsVisible="{Binding WatchlistNameError, Converter={StaticResource StringToBoolConverter}}"/>
+                    
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0"
+                                Text="Cancel"
+                                Command="{Binding CancelCreateWatchlistCommand}"
+                                BackgroundColor="Transparent"
+                                BorderColor="{StaticResource BorderDark}"
+                                BorderWidth="1"
+                                TextColor="{StaticResource OnSurfaceDark}"
+                                FontSize="12"
+                                HeightRequest="32"/>
+                        
+                        <Button Grid.Column="1"
+                                Text="Create"
+                                Command="{Binding ConfirmCreateWatchlistCommand}"
+                                BackgroundColor="{StaticResource PrimaryDark}"
+                                TextColor="{StaticResource TextOnAccent}"
+                                FontSize="12"
+                                HeightRequest="32"/>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
     </Grid>
 </ContentView>
 

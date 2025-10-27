@@ -23,6 +23,11 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
     [ObservableProperty] private ObservableCollection<ScannerRowViewModel> _watchlistItems = new();
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _errorMessage = string.Empty;
+    
+    // Inline watchlist creation popup
+    [ObservableProperty] private bool _isCreatingWatchlist = false;
+    [ObservableProperty] private string _newWatchlistName = "";
+    [ObservableProperty] private string _watchlistNameError = "";
 
     private readonly Dictionary<string, ScannerRowViewModel> _rowCache = new();
     private readonly ConcurrentQueue<TickData> _batchedTicks = new();
@@ -163,10 +168,8 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
     {
         try
         {
-            // Get base name from app title (Market Scanner by default)
+            // Get base name and suggest next available name
             var baseName = "Market Scanner";
-            
-            // Suggest next available name
             var existingNames = Watchlists.Select(w => w.Name).ToHashSet();
             var number = 1;
             string suggestedName;
@@ -177,30 +180,92 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
                 number++;
             } while (existingNames.Contains(suggestedName));
 
-            // Show input dialog
-            var dialog = new InputDialog(suggestedName);
-            await Application.Current!.MainPage!.Navigation.PushModalAsync(dialog);
+            // Set suggested name and show inline popup
+            NewWatchlistName = suggestedName;
+            IsCreatingWatchlist = true;
             
-            var name = await dialog.GetInputAsync();
+            await Task.CompletedTask; // Keep async signature
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to show watchlist creation popup");
+            ErrorMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ConfirmCreateWatchlistAsync()
+    {
+        try
+        {
+            // Validate name
+            var trimmedName = NewWatchlistName?.Trim() ?? "";
             
-            if (string.IsNullOrWhiteSpace(name))
+            // Validation: Empty or whitespace
+            if (string.IsNullOrWhiteSpace(trimmedName))
             {
-                _logger.LogInformation("Watchlist creation cancelled");
+                WatchlistNameError = "Name cannot be empty";
+                _logger.LogDebug("Watchlist creation failed - empty name");
+                return;
+            }
+            
+            // Validation: Length (max 100 chars per database schema)
+            if (trimmedName.Length > 100)
+            {
+                WatchlistNameError = "Name too long (max 100 characters)";
+                _logger.LogDebug("Watchlist creation failed - name too long");
+                return;
+            }
+            
+            // Validation: Duplicate name
+            if (Watchlists.Any(w => w.Name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase)))
+            {
+                WatchlistNameError = "Name already exists";
+                _logger.LogDebug("Watchlist creation failed - duplicate name");
+                return;
+            }
+            
+            // Validation: Invalid characters (prevent special chars that might break UI/DB)
+            var invalidChars = new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' };
+            if (trimmedName.Any(c => invalidChars.Contains(c)))
+            {
+                WatchlistNameError = "Name contains invalid characters";
+                _logger.LogDebug("Watchlist creation failed - invalid characters");
                 return;
             }
 
-            // Create empty watchlist with user-provided name
-            var newWatchlist = await _watchlistService.CreateWatchlistAsync(name);
+            // All validations passed - create watchlist
+            var newWatchlist = await _watchlistService.CreateWatchlistAsync(trimmedName);
             Watchlists.Add(newWatchlist);
             SelectedWatchlist = newWatchlist;
 
-            _logger.LogInformation("Created empty watchlist '{Name}'", name);
+            _logger.LogInformation("Created empty watchlist '{Name}'", trimmedName);
+            
+            // Hide popup and clear state
+            IsCreatingWatchlist = false;
+            NewWatchlistName = "";
+            WatchlistNameError = "";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create watchlist");
-            ErrorMessage = $"Failed to create watchlist: {ex.Message}";
+            WatchlistNameError = "Failed to create watchlist";
         }
+    }
+
+    [RelayCommand]
+    private void CancelCreateWatchlist()
+    {
+        IsCreatingWatchlist = false;
+        NewWatchlistName = "";
+        WatchlistNameError = "";
+        _logger.LogInformation("Watchlist creation cancelled");
+    }
+
+    partial void OnNewWatchlistNameChanged(string value)
+    {
+        // Clear error when user starts typing
+        WatchlistNameError = "";
     }
 
     [RelayCommand]
