@@ -18,46 +18,63 @@
           BackgroundColor="{StaticResource BackgroundDark}">
 
         <!-- Quote Input Bar -->
-        <Grid Grid.Row="0" 
-              ColumnDefinitions="*,Auto,Auto"
-              Padding="0,0,0,10"
-              BackgroundColor="{StaticResource SurfaceDark}"
-              ColumnSpacing="10">
+        <Border Grid.Row="0"
+                StrokeThickness="1"
+                Stroke="{StaticResource BorderDark}"
+                BackgroundColor="{StaticResource BackgroundDark}"
+                Padding="0"
+                Margin="0,0,0,10"
+                HeightRequest="32">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="4"/>
+            </Border.StrokeShape>
             
-            <!-- Symbol Input -->
-            <Entry Grid.Column="0"
-                   Text="{Binding NewSymbolText}"
-                   Placeholder="Enter symbol..."
-                   TextColor="{StaticResource OnSurfaceDark}"
-                   BackgroundColor="{StaticResource BackgroundDark}"
-                   FontSize="14"
-                   ReturnCommand="{Binding AddQuoteCommand}"/>
-            
-            <!-- Add Quote Button -->
-            <Button Grid.Column="1"
-                    Text="+"
-                    Command="{Binding AddQuoteCommand}"
-                    BackgroundColor="{StaticResource PrimaryDark}"
-                    TextColor="{StaticResource TextOnAccent}"
-                    FontSize="18"
-                    FontAttributes="Bold"
-                    WidthRequest="40"
-                    HeightRequest="32"
-                    Padding="0"
-                    CornerRadius="4"/>
-            
-            <!-- Clear All Button -->
-            <Button Grid.Column="2"
-                    Text="Clear"
-                    Command="{Binding ClearQuotesCommand}"
-                    BackgroundColor="Transparent"
-                    BorderColor="{StaticResource BorderDark}"
-                    BorderWidth="1"
-                    TextColor="{StaticResource OnSurfaceDark}"
-                    FontSize="12"
-                    HeightRequest="32"
-                    Padding="10,0"/>
-        </Grid>
+            <Grid ColumnDefinitions="*,Auto,Auto"
+                  ColumnSpacing="0"
+                  VerticalOptions="Center">
+                
+                <!-- Symbol Input -->
+                <Entry Grid.Column="0"
+                       Text="{Binding NewSymbolText}"
+                       Placeholder="Enter symbol..."
+                       TextColor="{StaticResource OnSurfaceDark}"
+                       BackgroundColor="Transparent"
+                       FontSize="14"
+                       HeightRequest="32"
+                       VerticalOptions="Center"
+                       Margin="8,0,0,0"
+                       ReturnCommand="{Binding AddQuoteCommand}"/>
+                
+                <!-- Add Quote Button -->
+                <Button Grid.Column="1"
+                        Text="+"
+                        Command="{Binding AddQuoteCommand}"
+                        BackgroundColor="{StaticResource PrimaryDark}"
+                        TextColor="{StaticResource TextOnAccent}"
+                        FontSize="18"
+                        FontAttributes="Bold"
+                        WidthRequest="40"
+                        HeightRequest="32"
+                        VerticalOptions="Center"
+                        HorizontalOptions="Center"
+                        Padding="0"
+                        CornerRadius="0"
+                        BorderWidth="0"/>
+                
+                <!-- Clear All Button -->
+                <Button Grid.Column="2"
+                        Text="Clear"
+                        Command="{Binding ClearQuotesCommand}"
+                        BackgroundColor="Transparent"
+                        BorderWidth="0"
+                        TextColor="{StaticResource OnSurfaceDark}"
+                        FontSize="12"
+                        HeightRequest="32"
+                        VerticalOptions="Center"
+                        Padding="10,0"
+                        CornerRadius="0"/>
+            </Grid>
+        </Border>
 
         <!-- Quote Grid -->
         <Grid Grid.Row="1"
@@ -66,19 +83,14 @@
 
             <!-- Header -->
             <Grid Grid.Row="0"
-                  ColumnDefinitions="100,150,80,80,80,80,120,120"
+                  ColumnDefinitions="100,100,80"
                   BackgroundColor="{StaticResource SurfaceDark}"
                   HeightRequest="40"
                   Padding="5,0">
 
                 <Label Grid.Column="0" Text="Symbol" Style="{StaticResource HeaderLabel}" HorizontalOptions="Start"/>
-                <Label Grid.Column="1" Text="Company" Style="{StaticResource HeaderLabel}" HorizontalOptions="Start"/>
+                <Label Grid.Column="1" Text="Price" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
                 <Label Grid.Column="2" Text="Change %" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
-                <Label Grid.Column="3" Text="Change" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
-                <Label Grid.Column="4" Text="Price" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
-                <Label Grid.Column="5" Text="Rel Vol" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
-                <Label Grid.Column="6" Text="Volume" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
-                <Label Grid.Column="7" Text="Avg Volume" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
             </Grid>
 
             <!-- Data Rows -->
@@ -89,7 +101,7 @@
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="100,150,80,80,80,80,120,120"
+                        <Grid ColumnDefinitions="100,100,80"
                               BackgroundColor="#1a1a1a"
                               HeightRequest="32"
                               Padding="5,0">
@@ -111,33 +123,7 @@
                                    HorizontalOptions="Start"
                                    Padding="6,4"/>
 
-                            <Label Grid.Column="1" Text="{Binding Company}" 
-                                   TextColor="{StaticResource OnSurfaceDark}" 
-                                   FontSize="13" 
-                                   VerticalOptions="Center"
-                                   HorizontalOptions="Start"
-                                   LineBreakMode="TailTruncation"
-                                   Padding="6,4"/>
-
-                            <Label Grid.Column="2" 
-                                   Text="{Binding ChangePercent, StringFormat='{0:+#0.00;-#0.00;0.00}%'}" 
-                                   TextColor="{Binding ChangePercent, Converter={StaticResource ChangeToColorConverter}}"
-                                   FontSize="13" 
-                                   VerticalOptions="Center"
-                                   HorizontalTextAlignment="End"
-                                   FontFamily="Cascadia Mono, Consolas, Menlo"
-                                   Padding="6,4"/>
-
-                            <Label Grid.Column="3" 
-                                   Text="{Binding Change, StringFormat='{0:+#0.00;-#0.00;0.00}'}" 
-                                   TextColor="{Binding Change, Converter={StaticResource ChangeToColorConverter}}"
-                                   FontSize="13" 
-                                   VerticalOptions="Center"
-                                   HorizontalTextAlignment="End"
-                                   FontFamily="Cascadia Mono, Consolas, Menlo"
-                                   Padding="6,4"/>
-
-                            <Label Grid.Column="4" 
+                            <Label Grid.Column="1" 
                                    Text="{Binding LastPrice, StringFormat='{0:C2}'}" 
                                    TextColor="{StaticResource OnSurfaceDark}" 
                                    FontSize="13" 
@@ -146,27 +132,9 @@
                                    FontFamily="Cascadia Mono, Consolas, Menlo"
                                    Padding="6,4"/>
 
-                            <Label Grid.Column="5" 
-                                   Text="{Binding RelativeVolume, StringFormat='{0:0.0}x'}" 
-                                   TextColor="{StaticResource OnSurfaceDark}" 
-                                   FontSize="13" 
-                                   VerticalOptions="Center"
-                                   HorizontalTextAlignment="End"
-                                   FontFamily="Cascadia Mono, Consolas, Menlo"
-                                   Padding="6,4"/>
-
-                            <Label Grid.Column="6" 
-                                   Text="{Binding Volume, StringFormat='{0:N0}'}" 
-                                   TextColor="{StaticResource OnSurfaceDark}" 
-                                   FontSize="13" 
-                                   VerticalOptions="Center"
-                                   HorizontalTextAlignment="End"
-                                   FontFamily="Cascadia Mono, Consolas, Menlo"
-                                   Padding="6,4"/>
-
-                            <Label Grid.Column="7" 
-                                   Text="{Binding DisplayAvgVolume}" 
-                                   TextColor="{StaticResource OnSurfaceDark}" 
+                            <Label Grid.Column="2" 
+                                   Text="{Binding ChangePercent, StringFormat='{0:+#0.00;-#0.00;0.00}%'}" 
+                                   TextColor="{Binding ChangePercent, Converter={StaticResource ChangeToColorConverter}}"
                                    FontSize="13" 
                                    VerticalOptions="Center"
                                    HorizontalTextAlignment="End"

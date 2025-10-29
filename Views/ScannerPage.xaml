@@ -266,8 +266,8 @@
                     BindingContext="{Binding WatchlistViewModel}" />
             </Grid>
 
-            <!-- Quote View (spans columns 0 and 1) -->
-            <Grid Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsInQuoteView}">
+            <!-- Quote View (column 1, 320px width) -->
+            <Grid Grid.Column="1" IsVisible="{Binding IsInQuoteView}">
                 <local:QuoteContentView 
                     BindingContext="{Binding QuoteViewModel}" />
             </Grid>
