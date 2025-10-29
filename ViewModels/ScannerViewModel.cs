@@ -21,6 +21,7 @@ public partial class ScannerViewModel : ObservableObject
     private readonly ILogger<ScannerViewModel> _logger;
     private readonly IWatchlistService _watchlistService;
     private WatchlistViewModel? _watchlistViewModel;
+    private QuoteViewModel? _quoteViewModel;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
@@ -90,12 +91,14 @@ public partial class ScannerViewModel : ObservableObject
     // View switching properties
     [ObservableProperty] private bool _isInScannerView = true;
     [ObservableProperty] private bool _isInWatchlistView = false;
+    [ObservableProperty] private bool _isInQuoteView = false;
 
     // Computed property for filter panel visibility
     public bool ShowFiltersPanel => IsInScannerView;
 
-    // Expose watchlist ViewModel for binding
+    // Expose ViewModels for binding
     public WatchlistViewModel? WatchlistViewModel => _watchlistViewModel;
+    public QuoteViewModel? QuoteViewModel => _quoteViewModel;
 
     // Property changed handler for view switching
     partial void OnIsInWatchlistViewChanged(bool value)
@@ -725,6 +728,7 @@ public partial class ScannerViewModel : ObservableObject
     {
         IsInScannerView = true;
         IsInWatchlistView = false;
+        IsInQuoteView = false;
         PageTitle = "Market Scanner";
         OnPropertyChanged(nameof(ShowFiltersPanel));
         _logger.LogInformation("Switched to Scanner view");
@@ -752,6 +756,7 @@ public partial class ScannerViewModel : ObservableObject
         
         _logger.LogDebug("Setting IsInWatchlistView = true");
         IsInWatchlistView = true;
+        IsInQuoteView = false;
         _logger.LogDebug("IsInWatchlistView set to true");
         
         PageTitle = "Watchlists";
@@ -796,6 +801,68 @@ public partial class ScannerViewModel : ObservableObject
         }, TaskScheduler.Default);
 
         _logger.LogInformation("Watchlist view initialized, database loading in background");
+    }
+
+    /// <summary>
+    /// Switches to the quote view.
+    /// </summary>
+    [RelayCommand]
+    private void SwitchToQuote()
+    {
+        _logger.LogDebug("SwitchToQuote called, _quoteViewModel is null: {IsNull}", _quoteViewModel == null);
+        
+        // Initialize quote ViewModel BEFORE switching to ensure it exists
+        if (_quoteViewModel == null)
+        {
+            _logger.LogDebug("Creating QuoteViewModel...");
+            InitializeQuoteView();
+            _logger.LogDebug("QuoteViewModel created");
+        }
+
+        IsInScannerView = false;
+        IsInWatchlistView = false;
+        IsInQuoteView = true;
+        
+        PageTitle = "Quotes";
+        
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+
+        _logger.LogInformation("Switched to Quote view");
+    }
+
+    /// <summary>
+    /// Initializes the quote ViewModel on-demand.
+    /// </summary>
+    private void InitializeQuoteView()
+    {
+        if (_quoteViewModel != null) return;
+
+        _logger.LogDebug("Creating QuoteViewModel on UI thread");
+
+        // Create ViewModel synchronously on UI thread (ready for binding)
+        _quoteViewModel = new QuoteViewModel(
+            (IbkrGatewayService)_scanner,
+            _dispatcher,
+            Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole())
+                .CreateLogger<QuoteViewModel>());
+
+        _logger.LogDebug("QuoteViewModel created, notifying property change");
+        OnPropertyChanged(nameof(QuoteViewModel));
+
+        // Initialize async (fire-and-forget)
+        _ = _quoteViewModel.InitializeAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                _logger.LogError(t.Exception, "Failed to initialize quote view");
+            }
+            else
+            {
+                _logger.LogDebug("QuoteViewModel initialized successfully");
+            }
+        }, TaskScheduler.Default);
+
+        _logger.LogInformation("Quote view initialized");
     }
 
     /// <summary>

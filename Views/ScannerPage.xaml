@@ -266,6 +266,12 @@
                     BindingContext="{Binding WatchlistViewModel}" />
             </Grid>
 
+            <!-- Quote View (spans columns 0 and 1) -->
+            <Grid Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsInQuoteView}">
+                <local:QuoteContentView 
+                    BindingContext="{Binding QuoteViewModel}" />
+            </Grid>
+
             <!-- Right Panel: Filters -->
             <ScrollView Grid.Column="1"
                         BackgroundColor="{StaticResource SurfaceDark}"
@@ -400,6 +406,21 @@
                             HeightRequest="60"
                             WidthRequest="50"
                             ToolTipProperties.Text="Watchlist"/>
+                </Border>
+                
+                <!-- Quote Icon Button -->
+                <Border BackgroundColor="{Binding IsInQuoteView, Converter={StaticResource BoolToAccentConverter}}"
+                        Padding="0" 
+                        Margin="0">
+                    <Button Text="&#xE8C1;" 
+                            FontFamily="Segoe Fluent Icons"
+                            Command="{Binding SwitchToQuoteCommand}"
+                            FontSize="20"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource OnSurfaceDark}"
+                            HeightRequest="60"
+                            WidthRequest="50"
+                            ToolTipProperties.Text="Quotes"/>
                 </Border>
                 
             </VerticalStackLayout>

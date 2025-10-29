@@ -1,0 +1,183 @@
+using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MarketScanner.Models;
+using MarketScanner.Services;
+using MarketScanner.Services.Ibkr;
+using Microsoft.Extensions.Logging;
+using System.Reactive.Linq;
+
+namespace MarketScanner.ViewModels;
+
+public partial class QuoteViewModel : ObservableObject, IDisposable
+{
+    private readonly IbkrGatewayService _ibkrService;
+    private readonly IDispatcherService _dispatcher;
+    private readonly ILogger<QuoteViewModel> _logger;
+
+    [ObservableProperty] private ObservableCollection<ScannerRowViewModel> _quoteItems = new();
+    [ObservableProperty] private string _newSymbolText = "";
+    [ObservableProperty] private string _errorMessage = string.Empty;
+    [ObservableProperty] private bool _isLoading;
+
+    private readonly Dictionary<string, ScannerRowViewModel> _rowCache = new();
+    private readonly ConcurrentQueue<TickData> _batchedTicks = new();
+    private readonly System.Timers.Timer _batchTimer;
+    private IDisposable? _tickSubscription;
+    private bool _disposed = false;
+
+    private const int BatchIntervalMs = 16; // ~60 FPS for smooth updates
+    private const int MaxBatchSize = 50;
+
+    public QuoteViewModel(
+        IbkrGatewayService ibkrService,
+        IDispatcherService dispatcher,
+        ILogger<QuoteViewModel> logger)
+    {
+        _ibkrService = ibkrService;
+        _dispatcher = dispatcher;
+        _logger = logger;
+
+        // Setup batch timer for smooth updates (60 FPS)
+        _batchTimer = new System.Timers.Timer(BatchIntervalMs);
+        _batchTimer.Elapsed += (_, _) => FlushBatchedTicks();
+        _batchTimer.AutoReset = true;
+        _batchTimer.Start();
+
+        // Subscribe to tick updates
+        _tickSubscription = _ibkrService.TickStream.Subscribe(tick =>
+        {
+            _batchedTicks.Enqueue(tick);
+        });
+    }
+
+    public Task InitializeAsync()
+    {
+        _logger.LogInformation("Quote panel initialized");
+        return Task.CompletedTask;
+    }
+
+    private void FlushBatchedTicks()
+    {
+        if (_batchedTicks.Count == 0 || _disposed)
+            return;
+
+        _dispatcher.OnUI(() =>
+        {
+            var processed = 0;
+            while (processed < MaxBatchSize && _batchedTicks.TryDequeue(out var tick))
+            {
+                if (_rowCache.TryGetValue(tick.Symbol, out var row))
+                {
+                    tick.ApplyTo(row);  // In-place update using the TickData extension method
+                }
+                processed++;
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async Task AddQuoteAsync()
+    {
+        try
+        {
+            var symbol = NewSymbolText?.Trim().ToUpperInvariant() ?? "";
+
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                ErrorMessage = "Please enter a symbol";
+                return;
+            }
+
+            // Check if already added
+            if (_rowCache.ContainsKey(symbol))
+            {
+                ErrorMessage = $"Symbol {symbol} is already in quotes";
+                return;
+            }
+
+            ErrorMessage = "";
+
+            // Create ViewModel for this symbol
+            var rowVm = new ScannerRowViewModel(_logger)
+            {
+                Symbol = symbol
+            };
+
+            _rowCache[symbol] = rowVm;
+            QuoteItems.Add(rowVm);
+
+            NewSymbolText = "";
+            _logger.LogInformation("Added symbol {Symbol} to quotes", symbol);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add quote");
+            ErrorMessage = $"Failed to add quote: {ex.Message}";
+        }
+
+        await Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private void RemoveQuote(ScannerRowViewModel row)
+    {
+        try
+        {
+            var symbol = row.Symbol;
+            QuoteItems.Remove(row);
+            _rowCache.Remove(symbol);
+            _logger.LogInformation("Removed symbol {Symbol} from quotes", symbol);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove quote");
+            ErrorMessage = $"Failed to remove quote: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void ClearQuotes()
+    {
+        try
+        {
+            QuoteItems.Clear();
+            _rowCache.Clear();
+            ErrorMessage = "";
+            _logger.LogInformation("Cleared all quotes");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clear quotes");
+            ErrorMessage = $"Failed to clear quotes: {ex.Message}";
+        }
+    }
+
+    partial void OnNewSymbolTextChanged(string value)
+    {
+        // Clear error when user starts typing
+        ErrorMessage = "";
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        
+        try
+        {
+            _batchTimer?.Stop();
+            _batchTimer?.Dispose();
+        }
+        catch { }
+
+        try
+        {
+            _tickSubscription?.Dispose();
+        }
+        catch { }
+
+        QuoteItems.Clear();
+        _rowCache.Clear();
+    }
+}
