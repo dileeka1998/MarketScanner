@@ -412,7 +412,7 @@
                 <Border BackgroundColor="{Binding IsInQuoteView, Converter={StaticResource BoolToAccentConverter}}"
                         Padding="0" 
                         Margin="0">
-                    <Button Text="&#xE8C1;" 
+                    <Button Text="&#xE907;" 
                             FontFamily="Segoe Fluent Icons"
                             Command="{Binding SwitchToQuoteCommand}"
                             FontSize="20"
