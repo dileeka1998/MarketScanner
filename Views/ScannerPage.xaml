@@ -7,8 +7,9 @@
              xmlns:svc="clr-namespace:MarketScanner.Services"
              xmlns:controls="clr-namespace:MarketScanner.Controls"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:local="clr-namespace:MarketScanner.Views"
              x:Class="MarketScanner.Views.ScannerPage"
-             Title="Market Scanner"
+             Title="{Binding PageTitle}"
              BackgroundColor="{StaticResource BackgroundDark}">
 
     <ContentPage.Resources>
@@ -18,6 +19,7 @@
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
             <converters:EqualityConverter x:Key="EqInt"/>
             <converters:DecimalNullableConverter x:Key="DecimalNullableConverter"/>
+            <converters:BoolToAccentColorConverter x:Key="BoolToAccentConverter"/>
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -25,16 +27,17 @@
                  Command="{Binding LoadDataCommand}"
                  BackgroundColor="{StaticResource BackgroundDark}">
 
-        <Grid ColumnDefinitions="*,320"
+        <Grid ColumnDefinitions="*,320,50"
               BackgroundColor="{StaticResource BackgroundDark}">
 
-            <!-- Left Panel: Data Table with Horizontal Scroll -->
-            <ScrollView x:Name="TableScroll"
-                        Grid.Column="0"
-                        Orientation="Horizontal"
-                        HorizontalScrollBarVisibility="Always"
-                        BackgroundColor="{StaticResource BackgroundDark}"
-                        Margin="0,0,8,0">
+            <!-- Scanner View -->
+            <Grid x:Name="ScannerContent" Grid.Column="0" IsVisible="{Binding IsInScannerView}">
+                
+                <ScrollView x:Name="TableScroll"
+                            Orientation="Horizontal"
+                            HorizontalScrollBarVisibility="Always"
+                            BackgroundColor="{StaticResource BackgroundDark}"
+                            Margin="0,0,8,0">
 
                 <Grid x:Name="TableRoot"
                       BackgroundColor="{StaticResource BackgroundDark}"
@@ -254,11 +257,20 @@
                     </CollectionView>
                 </Grid>
             </ScrollView>
+                
+            </Grid>
+
+            <!-- Watchlist View (spans columns 0 and 1) -->
+            <Grid Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding IsInWatchlistView}">
+                <local:WatchlistContentView 
+                    BindingContext="{Binding WatchlistViewModel}" />
+            </Grid>
 
             <!-- Right Panel: Filters -->
             <ScrollView Grid.Column="1"
                         BackgroundColor="{StaticResource SurfaceDark}"
-                        Padding="12">
+                        Padding="12"
+                        IsVisible="{Binding IsInScannerView}">
 
                 <StackLayout Spacing="12">
 
@@ -354,6 +366,43 @@
 
                 </StackLayout>
             </ScrollView>
+
+            <!-- Vertical Navigation Bar -->
+            <VerticalStackLayout Grid.Column="2" 
+                                 BackgroundColor="{StaticResource SurfaceDark}"
+                                 Spacing="0">
+                
+                <!-- Scanner Icon Button -->
+                <Border BackgroundColor="{Binding IsInScannerView, Converter={StaticResource BoolToAccentConverter}}"
+                        Padding="0" 
+                        Margin="0">
+                    <Button Text="&#xE9F9;" 
+                            FontFamily="Segoe Fluent Icons"
+                            Command="{Binding SwitchToScannerCommand}"
+                            FontSize="20"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource OnSurfaceDark}"
+                            HeightRequest="60"
+                            WidthRequest="50"
+                            ToolTipProperties.Text="Scanner"/>
+                </Border>
+                
+                <!-- Watchlist Icon Button -->
+                <Border BackgroundColor="{Binding IsInWatchlistView, Converter={StaticResource BoolToAccentConverter}}"
+                        Padding="0" 
+                        Margin="0">
+                    <Button Text="&#xE734;" 
+                            FontFamily="Segoe Fluent Icons"
+                            Command="{Binding SwitchToWatchlistCommand}"
+                            FontSize="20"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource OnSurfaceDark}"
+                            HeightRequest="60"
+                            WidthRequest="50"
+                            ToolTipProperties.Text="Watchlist"/>
+                </Border>
+                
+            </VerticalStackLayout>
 
         </Grid>
     </RefreshView>

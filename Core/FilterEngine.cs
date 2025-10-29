@@ -3,6 +3,8 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using MarketScanner.Models;
 using MarketScanner.ViewModels;
+using Microsoft.Extensions.Logging;
+
 
 namespace MarketScanner.Core
 {
@@ -22,10 +24,9 @@ namespace MarketScanner.Core
             decimal? MinChgPct,
             long? MinVolume,
             int TopN);
-
         public sealed record Result(int[] TopIndices);
 
-        public static Result Apply(ScannerRowViewModel[] rows, Criteria c)
+        public static Result Apply(ScannerRowViewModel[] rows, Criteria c, ILogger? logger = null)
         {
             // filter
             var idx = Enumerable.Range(0, rows.Length).Where(i =>
@@ -48,8 +49,13 @@ namespace MarketScanner.Core
                 }
 
                 // User-defined filters - ALWAYS apply (uses live tick data)
-                // Convert percentage (20) to decimal (0.20) for comparison with r.ChangePercent (stored as decimal)
-                if (c.MinChgPct is { } cmin && r.ChangePercent < (double)cmin / 100.0) return false;
+                // MinChgPct comparison: both values are percentages (e.g., 9.0 means 9%)
+                if (c.MinChgPct is { } cmin)
+                {
+                    logger?.LogInformation("Comparing {Symbol}: MinChgPct={MinChgPct} vs ChangePercent={ChangePercent} => Pass={Pass}", 
+                        r.Symbol, c.MinChgPct, r.ChangePercent, r.ChangePercent >= (double)cmin);
+                    if (r.ChangePercent < (double)cmin) return false;
+                }
 
                 return true;
             });

@@ -33,7 +33,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
 
     private readonly ILogger<IbkrGatewayService> _logger;
     private readonly IConfiguration _config;
-    
+
     private EClientSocket _client = default!;
     private EReaderSignal _signal = default!;
     private bool _connected;
@@ -53,7 +53,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
     private readonly ConcurrentDictionary<string, MarketState> _marketState = new();
     private readonly ConcurrentDictionary<string, SnapshotRow> _snapshots = new();
     private readonly ConcurrentDictionary<string, long> _averageVolumes = new();
-    
+
     // Historical data tracking
     private readonly ConcurrentDictionary<int, string> _histReqToSymbol = new();
     private readonly ConcurrentDictionary<int, List<long>> _histVolumes = new();
@@ -92,7 +92,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         var port = _config.GetValue<int?>("Ibkr:Port") ?? 4002;
         var clientId = _config.GetValue<int?>("Ibkr:ClientId") ?? 7777;
 
-        _logger.LogInformation("Connecting to IBKR at {Host}:{Port} with ClientId {ClientId}", 
+        _logger.LogInformation("Connecting to IBKR at {Host}:{Port} with ClientId {ClientId}",
             host, port, clientId);
 
         _signal = new EReaderMonitorSignal();
@@ -101,7 +101,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
 
         var reader = new EReader(_client, _signal);
         reader.Start();
-        
+
         _ = Task.Run(() =>
         {
             while (_client.IsConnected())
@@ -114,11 +114,11 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         // Wait for nextValidId callback (confirms connection)
         await WaitUntilAsync(() => _nextValidId > 0, TimeSpan.FromSeconds(5), ct);
         _connected = true;
-        
+
         // CRITICAL: Set to DELAYED immediately after connection
         _client.reqMarketDataType(3); // 3 = DELAYED
         _logger.LogInformation("Connected to IBKR (nextValidId={Id}, mode=DELAYED)", _nextValidId);
-        
+
         // Scanner parameters not needed - we use hardcoded region/product mappings
     }
 
@@ -139,13 +139,12 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
 
     public async Task<IReadOnlyList<ScannerRow>> ScanAsync(CancellationToken ct)
     {
-        return await ScanAsync(2, 20, "us", "stocks", "us stocks", 50, ct);
+        return await ScanAsync(2, 20, "stocks", "us stocks", 50, ct);
     }
 
     public async Task<IReadOnlyList<ScannerRow>> ScanAsync(
         decimal minPrice = 2,
         decimal maxPrice = 20,
-        string region = "us",
         string product = "stocks",
         string exchange = "us stocks",
         int topN = 50,
@@ -165,36 +164,25 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         var requestId = GetNextReqId();
         _currentScannerId = requestId; // Track current scanner for future cancellation
         var tcs = new TaskCompletionSource<List<ScannerRow>>();
-        
+
         _scannerWaiters[requestId] = tcs;
         _scannerBuffers[requestId] = new List<ScannerRow>();
         _scannerRequestIds[requestId] = true; // Track for Error 162 suppression
 
         // Map region to IBKR location code using constants
-        var locationCode = region.ToLowerInvariant() switch
-        {
-            "us" => IbkrConstants.US_STOCKS_MAJOR,      // "STK.US.MAJOR"
-            "europe" => IbkrConstants.EUROPE_STOCKS,    // "STK.EU"
-            "asia" => IbkrConstants.ASIA_STOCKS,        // "STK.HK" (fixed!)
-            "any" => IbkrConstants.US_STOCKS_MAJOR,     // Default to US for "any"
-            _ => IbkrConstants.US_STOCKS_MAJOR
-        };
+        const string locationCode = IbkrConstants.US_STOCKS_MAJOR;
 
         // Map (region, product) → IBKR instrument type (region-aware mapping)
-        var instrument = (region.ToLowerInvariant(), product.ToLowerInvariant()) switch
+        var instrument = product.ToLowerInvariant() switch
         {
-            ("us", "stocks") => "STK",
-            ("europe", "stocks") => "STOCK.EU",
-            ("asia", "stocks") => "STOCK.HK",
-            ("us", "futures") => "FUT.US",
-            ("europe", "futures") => "FUT.EU",
-            ("asia", "futures") => "FUT.HK",
-            ("us", "etfs") => "ETF.EQ.US",
-            _ => "STK"  // Default to US stocks
+            "stocks" => "STK",
+            "futures" => "FUT.us",
+            "etfs" => "ETF.EQ.US",
+            _ => "STK"
+
         };
 
-        _logger.LogInformation("Scanner instrument type: {Instrument} (from region: {Region}, product: {Product})", instrument, region, product);
-
+        _logger.LogInformation("Scanner instrument type: {Instrument} (product: {Product})", instrument, product);
         var scannerSubscription = new ScannerSubscription
         {
             Instrument = instrument,
@@ -206,7 +194,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
 
         // Scanner options (empty list - not used)
         var scanOptions = new List<TagValue>();
-        
+
         // Filter options - price, exchange filters applied at IBKR level via TagValue
         var filterOptions = new List<TagValue>
         {
@@ -216,7 +204,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         };
 
         // Add exchange filter if specified (not "any" or "us stocks")
-        if (!string.IsNullOrWhiteSpace(exchange) && 
+        if (!string.IsNullOrWhiteSpace(exchange) &&
             !exchange.Equals("any", StringComparison.OrdinalIgnoreCase) &&
             !exchange.Equals("us stocks", StringComparison.OrdinalIgnoreCase))
         {
@@ -232,19 +220,19 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             _logger.LogInformation("Adding exchange filter: {Exchange}", exchangeCode);
         }
 
-        _logger.LogInformation("Starting scanner subscription reqId={RequestId} with filters: price ${MinPrice}-${MaxPrice}, region={Region}, product={Product}, locationCode={LocationCode}, exchange={Exchange}, volume >100k, topN={TopN}", 
-            requestId, minPrice, maxPrice, region, product, locationCode, exchange, topN);
+        _logger.LogInformation("Starting scanner subscription reqId={RequestId} with filters: price ${MinPrice}-${MaxPrice}, product={Product}, locationCode={LocationCode}, exchange={Exchange}, volume >100k, topN={TopN}",
+    requestId, minPrice, maxPrice, product, locationCode, exchange, topN);
         _client.reqScannerSubscription(requestId, scannerSubscription, scanOptions, filterOptions);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-        
+
         try
         {
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
             var rows = await tcs.Task;
             _logger.LogInformation("Scanner returned {Count} rows", rows.Count);
-            
+
             // Cancel previous market data subscriptions to avoid "Duplicate ticker id" errors
             foreach (var kvp in _idToSymbol.ToList())
             {
@@ -252,7 +240,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             }
             _idToSymbol.Clear();
             _marketState.Clear();
-            
+
             // Cancel historical data requests
             foreach (var kvp in _histReqToSymbol.ToList())
             {
@@ -260,11 +248,11 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             }
             _histReqToSymbol.Clear();
             _histVolumes.Clear();
-            
+
             // Subscribe to market data for all scanner results
             var symbols = rows.Select(r => r.Symbol).ToList();
             SubscribeToMarketData(symbols);
-            
+
             return rows;
         }
         catch (TaskCanceledException)
@@ -308,7 +296,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         _logger.LogInformation("Starting scanner with session {SessionId}", sessionId);
 
         var rows = await ScanAsync(cancellationToken);
-        
+
         // Subscribe to market data for live updates
         SubscribeToMarketData(rows.Select(r => r.Symbol));
 
@@ -359,7 +347,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         await EnsureConnectedAsync(ct);
 
         var rows = await ScanAsync(ct);
-        
+
         // Subscribe to market data
         SubscribeToMarketData(rows.Select(r => r.Symbol));
 
@@ -395,14 +383,14 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
     private void SubscribeToMarketData(IEnumerable<string> symbols)
     {
         var tickerId = 10000; // Start from high ID like Node.js
-        
+
         foreach (var symbol in symbols)
         {
             if (_idToSymbol.ContainsValue(symbol)) continue; // Already subscribed
 
             _idToSymbol[tickerId] = symbol;
             _marketState[symbol] = new MarketState();
-            
+
             var contract = new Contract
             {
                 Symbol = symbol,
@@ -410,12 +398,12 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
                 Exchange = "SMART",
                 Currency = "USD"
             };
-            
+
             _client.reqMktData(tickerId, contract, "", false, false, null);
-            
+
             // Request historical data for average volume
             RequestHistoricalData(symbol, contract);
-            
+
             tickerId++;
         }
     }
@@ -425,7 +413,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
         var reqId = GetNextReqId();
         _histReqToSymbol[reqId] = symbol;
         _histVolumes[reqId] = new List<long>();
-        
+
         _client.reqHistoricalData(
             reqId, contract, "", "30 D", "1 day", "TRADES", 1, 1, false, null);
     }
@@ -444,7 +432,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
     {
         try
         {
-            if (!_scannerBuffers.TryGetValue(reqId, out var buffer)) 
+            if (!_scannerBuffers.TryGetValue(reqId, out var buffer))
             {
                 _logger.LogWarning("scannerData: No buffer found for reqId={ReqId}", reqId);
                 return;
@@ -473,9 +461,9 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
                     Product = "Stocks"
                 }
             };
-            
+
             buffer.Add(row);
-            _logger.LogDebug("scannerData: reqId={ReqId}, rank={Rank}, symbol={Symbol}, buffer size={BufferSize}", 
+            _logger.LogDebug("scannerData: reqId={ReqId}, rank={Rank}, symbol={Symbol}, buffer size={BufferSize}",
                 reqId, rank, row.Symbol, buffer.Count);
         }
         catch (Exception ex)
@@ -488,11 +476,11 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
     {
         try
         {
-            if (_scannerWaiters.TryGetValue(reqId, out var tcs) && 
+            if (_scannerWaiters.TryGetValue(reqId, out var tcs) &&
                 _scannerBuffers.TryGetValue(reqId, out var buffer))
             {
                 _logger.LogDebug("scannerDataEnd: reqId={ReqId}, rows={Count}", reqId, buffer.Count);
-                
+
                 tcs.TrySetResult(buffer);
             }
             else
@@ -536,17 +524,17 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             default:
                 return;
         }
-        
+
         EmitTickUpdate(symbol, state);
     }
 
     public void tickSize(int tickerId, int field, decimal size)
     {
         if (field != TICK_VOLUME && field != TICK_DELAYED_VOLUME) return;
-        
+
         if (!_idToSymbol.TryGetValue(tickerId, out var symbol)) return;
         if (!_marketState.TryGetValue(symbol, out var state)) return;
-        
+
         state.Volume = (long)size;
         _logger.LogDebug("Volume update: {Symbol} = {Volume:N0}", symbol, (long)size);
         EmitTickUpdate(symbol, state);
@@ -569,16 +557,16 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             {
                 var avgVolume = (long)volumes.Average();
                 _averageVolumes[symbol] = avgVolume;
-                
+
                 if (_marketState.TryGetValue(symbol, out var state))
                 {
                     state.AverageVolume = avgVolume;
                     EmitTickUpdate(symbol, state);
                 }
-                
+
                 _logger.LogDebug("Historical data: {Symbol} avgVolume={AvgVolume:N0}", symbol, avgVolume);
             }
-            
+
             _histReqToSymbol.TryRemove(reqId, out _);
             _histVolumes.TryRemove(reqId, out _);
         }
@@ -591,7 +579,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             var change = state.LastPrice.HasValue && state.PrevClose.HasValue
                 ? state.LastPrice.Value - state.PrevClose.Value
                 : 0m;
-            
+
             var changePct = state.PrevClose.HasValue && state.PrevClose.Value > 0 && state.LastPrice.HasValue
                 ? (state.LastPrice.Value - state.PrevClose.Value) / state.PrevClose.Value * 100
                 : 0m;
@@ -634,7 +622,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
 
     public void error(Exception e) => _logger.LogError(e, "IBKR Error");
     public void error(string str) => _logger.LogError("IBKR Error: {Message}", str);
-    
+
     public void error(int id, int errorCode, string errorMsg)
     {
         // Log all errors appropriately
@@ -661,7 +649,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
             }
         }
     }
-    
+
     public void connectAck() => _logger.LogInformation("IBKR connection acknowledged");
     public void connectionClosed() => _logger.LogWarning("IBKR connection closed");
     public void currentTime(long time) { }
@@ -692,7 +680,7 @@ public sealed class IbkrGatewayService : EWrapper, IScanner, IMarketDataService,
     public void managedAccounts(string accountsList) { }
     public void receiveFA(int faDataType, string faXmlData) { }
     public void historicalDataUpdate(int reqId, Bar bar) { }
-    public void scannerParameters(string xml){ }
+    public void scannerParameters(string xml) { }
     public void realtimeBar(int reqId, long time, double open, double high, double low, double close, long volume, double WAP, int count) { }
     public void fundamentalData(int reqId, string data) { }
     public void deltaNeutralValidation(int reqId, DeltaNeutralContract deltaNeutralContract) { }
