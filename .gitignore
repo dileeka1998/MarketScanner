@@ -1,3 +1,5 @@
+# Local playback data (recorded market data streams)
+delayed_ticks.ndjson
 # Build results
 bin/
 obj/

@@ -2,7 +2,12 @@
   "profiles": {
     "Windows Machine": {
       "commandName": "MsixPackage",
-      "nativeDebugging": false
+      "nativeDebugging": false,
+      "environmentVariables": {
+        "PLAYBACK_ENABLED": "1",
+        "PLAYBACK_FILE": "C:\\Users\\dilee\\xeno-repos\\algo-trading\\MarketScanner\\delayed_ticks.ndjson",
+        "PLAYBACK_SPEED": "1.0"
+      }
     }
   }
 }

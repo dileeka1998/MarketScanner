@@ -75,6 +75,9 @@ namespace MarketScanner
             builder.Services.AddSingleton<IMarketDataService>(sp => sp.GetRequiredService<IbkrGatewayService>());
             builder.Services.AddSingleton<IInstrumentMetadataProvider, IbkrInstrumentMetadataProvider>();
 
+            // Fallback playback services (for offline testing)
+            builder.Services.AddSingleton<PlaybackFallback>();
+
             // MAUI Services
             builder.Services.AddSingleton<IConnectivity>(provider => 
                 Microsoft.Maui.Networking.Connectivity.Current);

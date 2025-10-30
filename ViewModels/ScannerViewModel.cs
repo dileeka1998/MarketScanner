@@ -26,6 +26,8 @@ public partial class ScannerViewModel : ObservableObject
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
     private bool _disposed = false;
+    private bool _isOffline = false;
+    private bool _linkedQuotes = false;
     
     // Store page title for dynamic watchlist naming and view title (set from code-behind and when switching views)
     [ObservableProperty] private string _pageTitle = "Market Scanner"; // fallback default
@@ -168,7 +170,7 @@ public partial class ScannerViewModel : ObservableObject
         // Set production defaults AFTER timer is initialized
         SetProductionDefaults();
 
-        // Subscribe to tick stream and queue for batching
+        // Subscribe to IBKR tick stream and queue for batching
         if (scanner is IbkrGatewayService ibkrGateway)
         {
             ibkrGateway.TickStream.Subscribe(tick =>
@@ -281,9 +283,31 @@ public partial class ScannerViewModel : ObservableObject
 
             // Get fresh data using the scanner service with dynamic parameters
             // Cast to concrete type to access overloaded ScanAsync method
-            var rows = _scanner is IbkrGatewayService ibkrGateway
-                ? await ibkrGateway.ScanAsync(minPrice, maxPrice, product, exchange, TopN, _cts.Token)
-                : await _scanner.ScanAsync(_cts.Token);
+            IReadOnlyList<ScannerRow> rows;
+            try
+            {
+                if (_isOffline) throw new TimeoutException("Offline mode");
+                rows = (_scanner is IbkrGatewayService ibkrGateway)
+                    ? await ibkrGateway.ScanAsync(minPrice, maxPrice, product, exchange, TopN, _cts.Token)
+                    : await _scanner.ScanAsync(_cts.Token);
+            }
+            catch (Exception ex) when (IsConnectivityOrTimeout(ex))
+            {
+                // Offline fallback path
+                _logger.LogWarning(ex, "Scan failed or timed out; activating playback fallback");
+                _isOffline = true;
+                var fallback = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services?.GetService<MarketScanner.Services.Impl.PlaybackFallback>();
+                if (fallback != null && fallback.ActivateIfNeeded())
+                {
+                    var symbols = fallback.SelectSymbols(TopN, minPrice, maxPrice);
+                    fallback.UpdateSymbols(symbols);
+                    var latest = fallback.GetLatestSnapshots(symbols);
+                    await SeedFromFallbackAsync(symbols, latest);
+                    if (_linkedQuotes) await SyncQuotesToVisibleAsync();
+                    return;
+                }
+                throw;
+            }
 
             _logger.LogInformation("Received {Count} rows from scanner", rows.Count);
 
@@ -329,6 +353,7 @@ public partial class ScannerViewModel : ObservableObject
         {
             // No MinChgPct filter - apply other filters immediately
             await ApplyFiltersAsync();
+            if (_linkedQuotes) await SyncQuotesToVisibleAsync();
         }
         }
         catch (OperationCanceledException) { }
@@ -344,6 +369,63 @@ public partial class ScannerViewModel : ObservableObject
             DebugStatus = $"ScannerItems: {ScannerItems.Count}";
             _logger.LogInformation("RefreshAsync completed: ScannerItems={ScannerItemsCount}", ScannerItems.Count);
         }
+    }
+
+    private static bool IsConnectivityOrTimeout(Exception ex)
+    {
+        if (ex is TimeoutException) return true;
+        var msg = ex.Message?.ToLowerInvariant() ?? string.Empty;
+        return msg.Contains("not connected") || msg.Contains("actively refused") || msg.Contains("timeout");
+    }
+
+    private IEnumerable<string> DeriveFallbackSymbols(Services.Impl.PlaybackFallback fallback, int topN, decimal minPrice, decimal maxPrice)
+    {
+        // If we already saw some symbols in playback, prefer those; otherwise default set
+        var current = fallback.CurrentSymbols;
+        if (current != null && current.Count > 0)
+            return current.Take(topN);
+        return new[] { "AAPL","MSFT","NVDA","AMD","TSLA","META","AMZN","GOOGL","SPY","QQQ" }.Take(topN);
+    }
+
+    private async Task SeedFromFallbackAsync(IEnumerable<string> symbols, IReadOnlyDictionary<string, TickData> latest)
+    {
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            ScannerItems.Clear();
+            _rowLookup.Clear();
+            foreach (var s in symbols)
+            {
+                var rowVm = new ScannerRowViewModel
+                {
+                    Symbol = s,
+                    Company = s,
+                    Region = "United States",
+                    Product = "Stocks",
+                    Exchange = Exchange
+                };
+                if (latest.TryGetValue(s, out var t))
+                {
+                    t.ApplyTo(rowVm);
+                    if (t.PreviousClose.HasValue && t.PreviousClose.Value > 0)
+                        rowVm.UpdateClosePrice((double)t.PreviousClose.Value);
+                }
+                _rowLookup[s] = rowVm;
+                ScannerItems.Add(rowVm);
+            }
+            _snapshot = ScannerItems.ToArray();
+        });
+
+        // Ensure we are consuming fallback stream live
+        var fb = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services?.GetService<MarketScanner.Services.Impl.PlaybackFallback>();
+        if (fb != null)
+        {
+            fb.TickStream.Subscribe(t => _batchedTicks.Enqueue(t));
+        }
+
+        await ApplyFiltersAsync();
+        if (_linkedQuotes) await SyncQuotesToVisibleAsync();
+        IsRefreshing = false;
+        _logger.LogInformation("Fallback seeding complete: ScannerItems={Count}", ScannerItems.Count);
     }
 
     private void FlushBatchedTicks()
@@ -489,9 +571,28 @@ public partial class ScannerViewModel : ObservableObject
         // Check if we need to re-scan at IBKR level
         if (RequiresRescan())
         {
-            _logger.LogInformation("Significant filter changes detected, triggering re-scan");
-            await RefreshAsync();
-            return;
+            if (_isOffline)
+            {
+                // Reseed from fallback instead of IBKR
+                var fb = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services?.GetService<MarketScanner.Services.Impl.PlaybackFallback>();
+                if (fb != null && fb.ActivateIfNeeded())
+                {
+                    var minPrice = ParseDecimalSafe(MinPriceText) ?? 2;
+                    var maxPrice = ParseDecimalSafe(MaxPriceText) ?? 20;
+                    var symbols = fb.SelectSymbols(TopN, minPrice, maxPrice);
+                    fb.UpdateSymbols(symbols);
+                    var latest = fb.GetLatestSnapshots(symbols);
+                    await SeedFromFallbackAsync(symbols, latest);
+                    if (_linkedQuotes) await SyncQuotesToVisibleAsync();
+                    return;
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Significant filter changes detected, triggering re-scan");
+                await RefreshAsync();
+                return;
+            }
         }
 
         // If no items, skip client-side filtering
@@ -581,6 +682,23 @@ public partial class ScannerViewModel : ObservableObject
                 $"| Price=[{criteria.MinPrice?.ToString() ?? "-"}, {criteria.MaxPrice?.ToString() ?? "-"}] " +
                 $"| Vol>={(criteria.MinVolume?.ToString() ?? "-")}";
         });
+
+        if (_linkedQuotes)
+            await SyncQuotesToVisibleAsync();
+    }
+
+    private async Task SyncQuotesToVisibleAsync()
+    {
+        try
+        {
+            if (_quoteViewModel == null) return;
+            var visible = ScannerItems.Select(r => r.Symbol).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+            await _quoteViewModel.SyncToSymbols(visible);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed syncing quotes to visible symbols");
+        }
     }
 
 
@@ -685,7 +803,24 @@ public partial class ScannerViewModel : ObservableObject
                 {
                     await Task.Delay(TimeSpan.FromSeconds(delay), ct).ConfigureAwait(false);
                     if (!ct.IsCancellationRequested)
-                        await RefreshAsync().ConfigureAwait(false);
+                    {
+                        // If fallback is active, re-sync symbols based on current filters
+                        var fb = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services?.GetService<MarketScanner.Services.Impl.PlaybackFallback>();
+                        if (fb != null && (fb.IsActive || _isOffline))
+                        {
+                            var minPrice = ParseDecimalSafe(MinPriceText) ?? 2;
+                            var maxPrice = ParseDecimalSafe(MaxPriceText) ?? 20;
+                            var symbols = fb.SelectSymbols(TopN, minPrice, maxPrice);
+                            fb.UpdateSymbols(symbols);
+                            var latest = fb.GetLatestSnapshots(symbols);
+                            await SeedFromFallbackAsync(symbols, latest).ConfigureAwait(false);
+                            if (_linkedQuotes) await SyncQuotesToVisibleAsync().ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await RefreshAsync().ConfigureAwait(false);
+                        }
+                    }
                 }
                 catch (TaskCanceledException) { }
             }
@@ -895,6 +1030,9 @@ public partial class ScannerViewModel : ObservableObject
             {
                 await _quoteViewModel.AddQuotesFromScannerAsync(rows);
             }
+
+            // After bulk-add, link quotes to scanner
+            _linkedQuotes = true;
 
             // Switch to full Quotes view (do not alter the scanner right panel state beyond view switch)
             SwitchToQuote();

@@ -25,6 +25,8 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
     private readonly ConcurrentQueue<TickData> _batchedTicks = new();
     private readonly System.Timers.Timer _batchTimer;
     private IDisposable? _tickSubscription;
+    private IDisposable? _playbackSubscription;
+    private MarketScanner.Services.Impl.DelayedNdjsonTickSource? _playbackSource;
     private bool _disposed = false;
 
     private const int BatchIntervalMs = 16; // ~60 FPS for smooth updates
@@ -45,11 +47,28 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
         _batchTimer.AutoReset = true;
         _batchTimer.Start();
 
-        // Subscribe to tick updates
+        // Subscribe to tick updates (IBKR)
         _tickSubscription = _ibkrService.TickStream.Subscribe(tick =>
         {
             _batchedTicks.Enqueue(tick);
         });
+
+        // Fallback playback stream (NDJSON or synthetic via controller)
+        var fb = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services?.GetService<MarketScanner.Services.Impl.PlaybackFallback>();
+        if (fb != null && fb.IsActive)
+        {
+            _playbackSubscription = fb.TickStream.Subscribe(t => _batchedTicks.Enqueue(t));
+        }
+        else
+        {
+            // Legacy NDJSON env-based attach (best-effort)
+            _playbackSource = MarketScanner.Services.Impl.DelayedNdjsonTickSource.CreateFromEnv();
+            if (_playbackSource != null)
+            {
+                _playbackSource.Start();
+                _playbackSubscription = _playbackSource.Stream.Subscribe(tick => _batchedTicks.Enqueue(tick));
+            }
+        }
     }
 
     public Task InitializeAsync()
@@ -83,10 +102,10 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
                 // Seed with current values so UI shows something immediately; live ticks will update
                 rowVm.LastPrice = r.LastPrice;
                 rowVm.Volume = r.Volume;
-                rowVm.Change = r.Change;
-                rowVm.ChangePercent = r.ChangePercent;
                 rowVm.AvgVolume = r.AvgVolume;
-                rowVm.RelativeVolume = r.RelativeVolume;
+                // Seed previous close if available to enable Change/Change% immediately
+                if (r.PrevClose > 0)
+                    rowVm.UpdateClosePrice(r.PrevClose);
 
                 _rowCache[symbol] = rowVm;
                 QuoteItems.Add(rowVm);
@@ -98,6 +117,47 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
             ErrorMessage = $"Failed to add quotes: {ex.Message}";
         }
 
+        await Task.CompletedTask;
+    }
+
+    public async Task SyncToSymbols(IEnumerable<string> symbols)
+    {
+        try
+        {
+            var target = new HashSet<string>(symbols.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim().ToUpperInvariant()), StringComparer.OrdinalIgnoreCase);
+
+            // Remove missing
+            var toRemove = _rowCache.Keys.Where(k => !target.Contains(k)).ToList();
+            foreach (var k in toRemove)
+            {
+                if (_rowCache.TryGetValue(k, out var vm))
+                {
+                    QuoteItems.Remove(vm);
+                    _rowCache.Remove(k);
+                }
+            }
+
+            // Add new
+            foreach (var s in target)
+            {
+                if (_rowCache.ContainsKey(s)) continue;
+                var vm = new ScannerRowViewModel(_logger)
+                {
+                    Symbol = s,
+                    Company = s,
+                    Region = "United States",
+                    Product = "Stocks",
+                    Exchange = "us stocks"
+                };
+                _rowCache[s] = vm;
+                QuoteItems.Add(vm);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync quotes to symbols");
+            ErrorMessage = $"Failed to sync quotes: {ex.Message}";
+        }
         await Task.CompletedTask;
     }
 
@@ -217,6 +277,18 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
         try
         {
             _tickSubscription?.Dispose();
+        }
+        catch { }
+
+        try
+        {
+            _playbackSubscription?.Dispose();
+        }
+        catch { }
+
+        try
+        {
+            _playbackSource?.Dispose();
         }
         catch { }
 
