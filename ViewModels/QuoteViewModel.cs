@@ -58,6 +58,49 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
         return Task.CompletedTask;
     }
 
+    public async Task AddQuotesFromScannerAsync(IEnumerable<ScannerRowViewModel> rows)
+    {
+        try
+        {
+            if (rows == null) return;
+
+            // Build list to add (skip duplicates)
+            foreach (var r in rows)
+            {
+                var symbol = r.Symbol?.Trim().ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(symbol)) continue;
+                if (_rowCache.ContainsKey(symbol)) continue;
+
+                var rowVm = new ScannerRowViewModel(_logger)
+                {
+                    Symbol = symbol,
+                    Company = r.Company,
+                    Region = r.Region,
+                    Product = r.Product,
+                    Exchange = r.Exchange
+                };
+
+                // Seed with current values so UI shows something immediately; live ticks will update
+                rowVm.LastPrice = r.LastPrice;
+                rowVm.Volume = r.Volume;
+                rowVm.Change = r.Change;
+                rowVm.ChangePercent = r.ChangePercent;
+                rowVm.AvgVolume = r.AvgVolume;
+                rowVm.RelativeVolume = r.RelativeVolume;
+
+                _rowCache[symbol] = rowVm;
+                QuoteItems.Add(rowVm);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add quotes from scanner");
+            ErrorMessage = $"Failed to add quotes: {ex.Message}";
+        }
+
+        await Task.CompletedTask;
+    }
+
     private void FlushBatchedTicks()
     {
         if (_batchedTicks.Count == 0 || _disposed)

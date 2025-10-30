@@ -866,6 +866,46 @@ public partial class ScannerViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Add all currently visible scanner items to the Quotes panel and switch to the full Quote view.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddAllVisibleToQuotesAsync()
+    {
+        try
+        {
+            // Ensure QuoteViewModel exists
+            if (_quoteViewModel == null)
+            {
+                InitializeQuoteView();
+            }
+
+            if (_quoteViewModel == null)
+            {
+                _logger.LogError("QuoteViewModel is not available");
+                return;
+            }
+
+            // Take a snapshot of currently visible items
+            var rows = ScannerItems?.ToArray() ?? Array.Empty<ScannerRowViewModel>();
+            if (rows.Length == 0)
+            {
+                _logger.LogInformation("No visible scanner items to add to Quotes");
+            }
+            else
+            {
+                await _quoteViewModel.AddQuotesFromScannerAsync(rows);
+            }
+
+            // Switch to full Quotes view (do not alter the scanner right panel state beyond view switch)
+            SwitchToQuote();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add visible items to Quotes");
+        }
+    }
+
+    /// <summary>
     /// Generate next available watchlist name using page title
     /// </summary>
     private async Task<string> GenerateWatchlistNameAsync()

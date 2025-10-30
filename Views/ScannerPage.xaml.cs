@@ -253,7 +253,7 @@ public partial class ScannerPage : ContentPage
             };
             // Bind command to the page's ViewModel
             doubleTapGesture.SetBinding(TapGestureRecognizer.CommandProperty, 
-                new Binding("AddToWatchlistCommand", source: BindingContext));
+                new Binding("AddAllVisibleToQuotesCommand", source: BindingContext));
             // Bind parameter to the current row (the ScannerRowViewModel)
             doubleTapGesture.SetBinding(TapGestureRecognizer.CommandParameterProperty, ".");
             rowGrid.GestureRecognizers.Add(doubleTapGesture);
