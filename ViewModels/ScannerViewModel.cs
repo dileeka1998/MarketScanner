@@ -501,7 +501,12 @@ public partial class ScannerViewModel : ObservableObject
 
                 while (_batchedTicks.TryDequeue(out var tick) && processedCount < MaxBatchSize)
                 {
-                    var rowVm = GetOrCreateRow(tick.Symbol);
+                    // Only process ticks for symbols in our snapshot - skip filtered-out symbols
+                    if (!_rowLookup.TryGetValue(tick.Symbol, out var rowVm))
+                    {
+                        // Symbol not in snapshot - skip this tick (it's filtered out)
+                        continue;
+                    }
                     tick.ApplyTo(rowVm);  // In-place update!
                     // RelativeVolume is auto-calculated in ScannerRowViewModel
                     updatedSymbols.Add(tick.Symbol);
