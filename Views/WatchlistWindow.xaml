@@ -151,7 +151,7 @@
                                    Padding="6,4"/>
 
                             <Label Grid.Column="5" 
-                                   Text="{Binding RelativeVolume, StringFormat='{0:0.0}x'}" 
+                                   Text="{Binding DisplayRV}" 
                                    TextColor="{StaticResource OnSurfaceDark}" 
                                    FontSize="13" 
                                    VerticalOptions="Center"
