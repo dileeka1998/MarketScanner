@@ -69,14 +69,34 @@ public sealed class PlaybackFallback : IDisposable
     }
 
     /// <summary>
-    /// Returns a symbol list respecting TopN; price filters are advisory in synthetic/NDJSON modes.
+    /// Returns a symbol list respecting TopN and price filters using latest tick data.
     /// </summary>
     public IReadOnlyList<string> SelectSymbols(int topN, decimal? minPrice, decimal? maxPrice)
     {
         if (_universe == null || _universe.Length == 0)
             _universe = DefaultSymbols().ToArray();
         if (topN <= 0) topN = 5;
-        return _universe.Take(topN).ToArray();
+
+        // If no price filters, return simple TopN
+        if (minPrice == null && maxPrice == null)
+            return _universe.Take(topN).ToArray();
+
+        // Filter by price using latest tick data
+        var candidates = _universe.Where(s =>
+        {
+            if (!_latestBySymbol.TryGetValue(s, out var tick)) return false; // Skip if no tick data yet
+            var price = (decimal)tick.LastPrice;
+            if (minPrice.HasValue && price < minPrice.Value) return false;
+            if (maxPrice.HasValue && price > maxPrice.Value) return false;
+            return true;
+        }).Take(topN).ToArray();
+
+        // If we have some candidates, return them
+        if (candidates.Length > 0) return candidates;
+
+        // Fallback: if no tick data matches, return a broader set (let FilterEngine filter client-side)
+        // This handles initial state before ticks arrive
+        return _universe.Take(topN * 3).ToArray(); // Return 3x to give FilterEngine options
     }
 
     public IReadOnlyDictionary<string, TickData> GetLatestSnapshots(IEnumerable<string> forSymbols)
