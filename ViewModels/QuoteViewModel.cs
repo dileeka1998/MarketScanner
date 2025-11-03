@@ -126,6 +126,10 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
         {
             var target = new HashSet<string>(symbols.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim().ToUpperInvariant()), StringComparer.OrdinalIgnoreCase);
 
+            // Try to get latest snapshots from fallback if available
+            var fb = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services?.GetService<MarketScanner.Services.Impl.PlaybackFallback>();
+            var latest = fb != null ? fb.GetLatestSnapshots(target) : new Dictionary<string, TickData>();
+
             // Remove missing
             var toRemove = _rowCache.Keys.Where(k => !target.Contains(k)).ToList();
             foreach (var k in toRemove)
@@ -137,21 +141,43 @@ public partial class QuoteViewModel : ObservableObject, IDisposable
                 }
             }
 
-            // Add new
+            // Add new or update existing
             foreach (var s in target)
             {
-                if (_rowCache.ContainsKey(s)) continue;
-                var vm = new ScannerRowViewModel(_logger)
+                if (_rowCache.TryGetValue(s, out var existingVm))
                 {
-                    Symbol = s,
-                    Company = s,
-                    Region = "United States",
-                    Product = "Stocks",
-                    Exchange = "us stocks"
-                };
-                _rowCache[s] = vm;
-                QuoteItems.Add(vm);
+                    // Update existing item with latest tick data if available
+                    if (latest.TryGetValue(s, out var tick))
+                    {
+                        tick.ApplyTo(existingVm);
+                        if (tick.PreviousClose.HasValue && tick.PreviousClose.Value > 0)
+                            existingVm.UpdateClosePrice((double)tick.PreviousClose.Value);
+                    }
+                }
+                else
+                {
+                    // Add new
+                    var vm = new ScannerRowViewModel(_logger)
+                    {
+                        Symbol = s,
+                        Company = s,
+                        Region = "United States",
+                        Product = "Stocks",
+                        Exchange = "us stocks"
+                    };
+                    // Seed with latest tick data if available
+                    if (latest.TryGetValue(s, out var tick))
+                    {
+                        tick.ApplyTo(vm);
+                        if (tick.PreviousClose.HasValue && tick.PreviousClose.Value > 0)
+                            vm.UpdateClosePrice((double)tick.PreviousClose.Value);
+                    }
+                    _rowCache[s] = vm;
+                    QuoteItems.Add(vm);
+                }
             }
+
+            _logger.LogInformation("Synced quotes to {Count} symbols", target.Count);
         }
         catch (Exception ex)
         {

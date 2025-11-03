@@ -41,13 +41,16 @@ public sealed class PlaybackFallback : IDisposable
             return true;
         }
 
-        // Fall back to synthetic using either provided or default symbol universe (200 symbols)
+        // Fall back to synthetic using full universe (200 symbols) - always generate ticks for all symbols
         _universe = DefaultSymbols().ToArray();
-        var symbols = (preferredSymbols != null && preferredSymbols.Any()) ? preferredSymbols : _universe;
-        _synthetic = new SyntheticTickSource(symbols, TimeSpan.FromMilliseconds(150));
+        // Always use full universe for tick generation to ensure SelectSymbols can filter across all symbols
+        _synthetic = new SyntheticTickSource(_universe, TimeSpan.FromMilliseconds(150));
         _synthetic.Start();
         _syntheticSub = _synthetic.Stream.Subscribe(OnTick);
-        _currentSymbols = symbols.Distinct().ToArray();
+        // Store preferred symbols only for tracking, but don't limit tick generation
+        _currentSymbols = (preferredSymbols != null && preferredSymbols.Any()) 
+            ? preferredSymbols.Distinct().ToArray() 
+            : _universe.ToArray();
         _active = true;
         return true;
     }
@@ -56,20 +59,15 @@ public sealed class PlaybackFallback : IDisposable
     {
         var set = symbols?.Distinct().ToArray() ?? Array.Empty<string>();
         _currentSymbols = set;
-        if (_synthetic != null)
-        {
-            // Recreate synthetic with new symbol set
-            _syntheticSub?.Dispose();
-            _synthetic.Dispose();
-            _synthetic = new SyntheticTickSource(set, TimeSpan.FromMilliseconds(150));
-            _synthetic.Start();
-            _syntheticSub = _synthetic.Stream.Subscribe(OnTick);
-        }
+        // DON'T recreate SyntheticTickSource - keep it generating ticks for full universe
+        // This ensures _latestBySymbol always has data for all symbols in universe
+        // SelectSymbols can then filter by price across the entire universe
         // NDJSON emits whatever is in file; we just change seeding list
     }
 
     /// <summary>
     /// Returns a symbol list respecting TopN and price filters using latest tick data.
+    /// Returns more symbols than TopN to give FilterEngine a pool to filter from (volume, change%, etc.).
     /// </summary>
     public IReadOnlyList<string> SelectSymbols(int topN, decimal? minPrice, decimal? maxPrice)
     {
@@ -77,11 +75,16 @@ public sealed class PlaybackFallback : IDisposable
             _universe = DefaultSymbols().ToArray();
         if (topN <= 0) topN = 5;
 
-        // If no price filters, return simple TopN
-        if (minPrice == null && maxPrice == null)
-            return _universe.Take(topN).ToArray();
+        // Return a larger pool (3x TopN) so FilterEngine can filter by volume, change%, etc.
+        // and still have enough symbols to satisfy TopN after filtering
+        // Only apply minimum for very small TopN values
+        var poolSize = topN >= 5 ? topN * 3 : Math.Max(topN * 3, 15);
 
-        // Filter by price using latest tick data
+        // If no price filters, return a broader pool
+        if (minPrice == null && maxPrice == null)
+            return _universe.Take(poolSize).ToArray();
+
+        // Filter by price using latest tick data, then return a broader pool
         var candidates = _universe.Where(s =>
         {
             if (!_latestBySymbol.TryGetValue(s, out var tick)) return false; // Skip if no tick data yet
@@ -89,14 +92,14 @@ public sealed class PlaybackFallback : IDisposable
             if (minPrice.HasValue && price < minPrice.Value) return false;
             if (maxPrice.HasValue && price > maxPrice.Value) return false;
             return true;
-        }).Take(topN).ToArray();
+        }).Take(poolSize).ToArray();
 
         // If we have some candidates, return them
         if (candidates.Length > 0) return candidates;
 
         // Fallback: if no tick data matches, return a broader set (let FilterEngine filter client-side)
         // This handles initial state before ticks arrive
-        return _universe.Take(topN * 3).ToArray(); // Return 3x to give FilterEngine options
+        return _universe.Take(poolSize).ToArray();
     }
 
     public IReadOnlyDictionary<string, TickData> GetLatestSnapshots(IEnumerable<string> forSymbols)
