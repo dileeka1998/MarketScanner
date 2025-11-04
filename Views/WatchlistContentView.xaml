@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:MarketScanner.Converters"
+             x:Class="MarketScanner.Views.WatchlistContentView">
+
+    <ContentView.Resources>
+        <ResourceDictionary>
+            <converters:ChangeToColorConverter x:Key="ChangeToColorConverter"/>
+            <converters:StringToBoolConverter x:Key="StringToBoolConverter"/>
+            <converters:BoolToAccentColorConverter x:Key="BoolToAccentConverter"/>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:IsSelectedWatchlistConverter x:Key="IsSelectedWatchlistConverter"/>
+        </ResourceDictionary>
+    </ContentView.Resources>
+
+    <Grid x:Name="WatchlistRoot"
+          RowDefinitions="Auto,*" 
+          Padding="10"
+          BackgroundColor="{StaticResource BackgroundDark}">
+
+        <!-- Tab Bar -->
+        <Grid Grid.Row="0" 
+              ColumnDefinitions="*,Auto"
+              Padding="0,0,0,10"
+              BackgroundColor="{StaticResource SurfaceDark}"
+              ColumnSpacing="10">
+            
+            <!-- Watchlist Tabs (Horizontal ScrollView) -->
+            <ScrollView Grid.Column="0" 
+                        Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Always">
+                <HorizontalStackLayout Spacing="2" Padding="5" BindableLayout.ItemsSource="{Binding Watchlists}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="12,6"
+                                    Margin="2,0">
+                                <Border.Stroke>
+                                    <MultiBinding Converter="{StaticResource IsSelectedWatchlistConverter}" ConverterParameter="Stroke">
+                                        <Binding Path="." />
+                                        <Binding Path="BindingContext.SelectedWatchlist" Source="{x:Reference WatchlistRoot}" />
+                                    </MultiBinding>
+                                </Border.Stroke>
+                                <Border.BackgroundColor>
+                                    <MultiBinding Converter="{StaticResource IsSelectedWatchlistConverter}" ConverterParameter="Background">
+                                        <Binding Path="." />
+                                        <Binding Path="BindingContext.SelectedWatchlist" Source="{x:Reference WatchlistRoot}" />
+                                    </MultiBinding>
+                                </Border.BackgroundColor>
+                                <Border.StrokeThickness>
+                                    <MultiBinding Converter="{StaticResource IsSelectedWatchlistConverter}" ConverterParameter="StrokeThickness">
+                                        <Binding Path="." />
+                                        <Binding Path="BindingContext.SelectedWatchlist" Source="{x:Reference WatchlistRoot}" />
+                                    </MultiBinding>
+                                </Border.StrokeThickness>
+                                
+                                <HorizontalStackLayout Spacing="8">
+                                    <!-- Tab Name -->
+                                    <Label Text="{Binding Name}" 
+                                           TextColor="{StaticResource OnSurfaceDark}"
+                                           FontSize="13"
+                                           VerticalOptions="Center"/>
+                                    
+                                    <!-- Close Button (×) -->
+                                    <Button Text="×" 
+                                            FontSize="16"
+                                            Command="{Binding BindingContext.DeleteWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                            CommandParameter="{Binding .}"
+                                            BackgroundColor="Transparent"
+                                            TextColor="{StaticResource OnSurfaceDark}"
+                                            WidthRequest="16"
+                                            HeightRequest="16"
+                                            Padding="0"
+                                            Margin="0"/>
+                                </HorizontalStackLayout>
+                                
+                                <!-- Tap to select tab -->
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer 
+                                        Command="{Binding BindingContext.SelectWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                        CommandParameter="{Binding .}"/>
+                                </Border.GestureRecognizers>
+                                
+                                <!-- Right-click context menu (Rename - stubbed for now) -->
+                                <FlyoutBase.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Rename (Coming Soon)" 
+                                                        Command="{Binding BindingContext.RenameWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                                        CommandParameter="{Binding .}"
+                                                        IsEnabled="False"/>
+                                        <MenuFlyoutItem Text="Delete" 
+                                                        Command="{Binding BindingContext.DeleteWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                                        CommandParameter="{Binding .}"/>
+                                    </MenuFlyout>
+                                </FlyoutBase.ContextFlyout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </HorizontalStackLayout>
+            </ScrollView>
+            
+            <!-- New Watchlist Button (+) -->
+            <Button Grid.Column="1"
+                    Text="+"
+                    Command="{Binding CreateWatchlistCommand}"
+                    BackgroundColor="{StaticResource PrimaryDark}"
+                    TextColor="{StaticResource TextOnAccent}"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    WidthRequest="40"
+                    HeightRequest="32"
+                    Padding="0"
+                    CornerRadius="4"/>
+        </Grid>
+
+        <!-- Watchlist Grid -->
+        <Grid Grid.Row="1"
+              RowDefinitions="Auto,*"
+              BackgroundColor="{StaticResource BackgroundDark}">
+
+            <!-- Header -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="100,150,80,80,80,80,120,120"
+                  BackgroundColor="{StaticResource SurfaceDark}"
+                  HeightRequest="40"
+                  Padding="5,0">
+
+                <Label Grid.Column="0" Text="Symbol" Style="{StaticResource HeaderLabel}" HorizontalOptions="Start"/>
+                <Label Grid.Column="1" Text="Company" Style="{StaticResource HeaderLabel}" HorizontalOptions="Start"/>
+                <Label Grid.Column="2" Text="Change %" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="3" Text="Change" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="4" Text="Price" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="5" Text="Rel Vol" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="6" Text="Volume" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+                <Label Grid.Column="7" Text="Avg Volume" Style="{StaticResource HeaderLabel}" HorizontalTextAlignment="End"/>
+            </Grid>
+
+            <!-- Data Rows -->
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding WatchlistItems}"
+                            BackgroundColor="#1a1a1a"
+                            SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="100,150,80,80,80,80,120,120"
+                              BackgroundColor="#1a1a1a"
+                              HeightRequest="32"
+                              Padding="5,0">
+
+                            <!-- Right-click context menu -->
+                            <FlyoutBase.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="Remove from Watchlist"
+                                                    Command="{Binding BindingContext.RemoveFromWatchlistCommand, Source={x:Reference WatchlistRoot}}"
+                                                    CommandParameter="{Binding .}" />
+                                </MenuFlyout>
+                            </FlyoutBase.ContextFlyout>
+
+                            <!-- Data cells -->
+                            <Label Grid.Column="0" Text="{Binding Symbol}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Start"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="1" Text="{Binding Company}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Start"
+                                   LineBreakMode="TailTruncation"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="2" 
+                                   Text="{Binding ChangePercent, StringFormat='{0:+#0.00;-#0.00;0.00}%'}" 
+                                   TextColor="{Binding ChangePercent, Converter={StaticResource ChangeToColorConverter}}"
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="3" 
+                                   Text="{Binding Change, StringFormat='{0:+#0.00;-#0.00;0.00}'}" 
+                                   TextColor="{Binding Change, Converter={StaticResource ChangeToColorConverter}}"
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="4" 
+                                   Text="{Binding LastPrice, StringFormat='{0:C2}'}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="5" 
+                                   Text="{Binding RelativeVolume, StringFormat='{0:0.0}x'}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="6" 
+                                   Text="{Binding Volume, StringFormat='{0:N0}'}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+
+                            <Label Grid.Column="7" 
+                                   Text="{Binding DisplayAvgVolume}" 
+                                   TextColor="{StaticResource OnSurfaceDark}" 
+                                   FontSize="13" 
+                                   VerticalOptions="Center"
+                                   HorizontalTextAlignment="End"
+                                   FontFamily="Cascadia Mono, Consolas, Menlo"
+                                   Padding="6,4"/>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.EmptyView>
+                    <StackLayout VerticalOptions="CenterAndExpand" HorizontalOptions="CenterAndExpand">
+                        <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                           IsVisible="{Binding IsLoading}"
+                                           Color="{StaticResource PrimaryDark}"/>
+                        <Label Text="No symbols in watchlist. Double-click rows in scanner to add."
+                               IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"
+                               TextColor="{StaticResource OnSurfaceVariantDark}"
+                               HorizontalOptions="Center"
+                               Margin="0,10,0,0"/>
+                    </StackLayout>
+                </CollectionView.EmptyView>
+            </CollectionView>
+        </Grid>
+
+        <!-- Error Message -->
+        <Label Grid.Row="1"
+               Text="{Binding ErrorMessage}"
+               IsVisible="{Binding ErrorMessage, Converter={StaticResource StringToBoolConverter}}"
+               TextColor="{StaticResource ErrorColor}"
+               VerticalOptions="End"
+               HorizontalOptions="Center"
+               Padding="10"
+               BackgroundColor="{StaticResource SurfaceDark}"/>
+
+        <!-- Inline Watchlist Name Input Popup (Floating Overlay) -->
+        <Grid Grid.RowSpan="2"
+              IsVisible="{Binding IsCreatingWatchlist}"
+              BackgroundColor="#80000000"
+              InputTransparent="False"
+              Padding="10">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CancelCreateWatchlistCommand}"/>
+            </Grid.GestureRecognizers>
+            
+            <!-- Popup Box (positioned top-right near + button) -->
+            <Border HorizontalOptions="End"
+                    VerticalOptions="Start"
+                    Margin="0,40,0,0"
+                    Padding="15"
+                    BackgroundColor="{StaticResource SurfaceDark}"
+                    Stroke="{StaticResource PrimaryDark}"
+                    StrokeThickness="2"
+                    WidthRequest="300">
+                
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer/>
+                </Border.GestureRecognizers>
+                
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="New Watchlist Name"
+                           FontSize="13"
+                           TextColor="{StaticResource OnSurfaceDark}"
+                           FontAttributes="Bold"/>
+                    
+                    <Entry x:Name="WatchlistNameEntry"
+                           Text="{Binding NewWatchlistName}"
+                           Placeholder="Enter name..."
+                           TextColor="{StaticResource OnSurfaceDark}"
+                           BackgroundColor="{StaticResource BackgroundDark}"
+                           FontSize="13"
+                           ReturnCommand="{Binding ConfirmCreateWatchlistCommand}"/>
+                    
+                    <!-- Error Message -->
+                    <Label Text="{Binding WatchlistNameError}"
+                           TextColor="{StaticResource ErrorColor}"
+                           FontSize="11"
+                           IsVisible="{Binding WatchlistNameError, Converter={StaticResource StringToBoolConverter}}"/>
+                    
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0"
+                                Text="Cancel"
+                                Command="{Binding CancelCreateWatchlistCommand}"
+                                BackgroundColor="Transparent"
+                                BorderColor="{StaticResource BorderDark}"
+                                BorderWidth="1"
+                                TextColor="{StaticResource OnSurfaceDark}"
+                                FontSize="12"
+                                HeightRequest="32"/>
+                        
+                        <Button Grid.Column="1"
+                                Text="Create"
+                                Command="{Binding ConfirmCreateWatchlistCommand}"
+                                BackgroundColor="{StaticResource PrimaryDark}"
+                                TextColor="{StaticResource TextOnAccent}"
+                                FontSize="12"
+                                HeightRequest="32"/>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+    </Grid>
+</ContentView>
+

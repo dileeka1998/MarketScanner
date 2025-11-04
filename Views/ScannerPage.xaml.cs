@@ -246,6 +246,18 @@ public partial class ScannerPage : ContentPage
             rowGrid.Children.Add(volumeLabel);
             rowGrid.Children.Add(averageVolumeLabel);
             
+            // Add double-tap gesture for adding to watchlist
+            var doubleTapGesture = new TapGestureRecognizer 
+            { 
+                NumberOfTapsRequired = 2 
+            };
+            // Bind command to the page's ViewModel
+            doubleTapGesture.SetBinding(TapGestureRecognizer.CommandProperty, 
+                new Binding("AddToWatchlistCommand", source: BindingContext));
+            // Bind parameter to the current row (the ScannerRowViewModel)
+            doubleTapGesture.SetBinding(TapGestureRecognizer.CommandParameterProperty, ".");
+            rowGrid.GestureRecognizers.Add(doubleTapGesture);
+            
             return rowGrid;
         });
         
@@ -257,6 +269,9 @@ public partial class ScannerPage : ContentPage
         base.OnAppearing();
         if (BindingContext is ViewModels.ScannerViewModel vm)
         {
+            // Pass page title to ViewModel for dynamic watchlist naming
+            vm.SetPageTitle(this.Title);
+            
             // Load refresh preferences on first appearance
             vm.LoadRefreshPrefs();
             
@@ -280,6 +295,4 @@ public partial class ScannerPage : ContentPage
             vm.GetType().GetMethod("DebouncedApply", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
               ?.Invoke(vm, null);
     }
-
-
 }

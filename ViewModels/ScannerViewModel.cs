@@ -19,28 +19,56 @@ public partial class ScannerViewModel : ObservableObject
     private readonly IScanner _scanner;
     private readonly IDispatcherService _dispatcher;
     private readonly ILogger<ScannerViewModel> _logger;
+    private readonly IWatchlistService _watchlistService;
+    private WatchlistViewModel? _watchlistViewModel;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _filterCts;
     private int _applyEpoch; // NEW: prevents out-of-order commits
     private bool _disposed = false;
     
+    // Store page title for dynamic watchlist naming and view title (set from code-behind and when switching views)
+    [ObservableProperty] private string _pageTitle = "Market Scanner"; // fallback default
+
     // Track previous scan-level filters for hybrid filtering
     private (decimal minPrice, decimal maxPrice, string region, string product, string exchange, int topN)? _previousScanFilters;
 
-    // DISABLED: Auto-refresh on loosening (client-side filtering only)
-    // private decimal? _previousMinPrice;
-    // private decimal? _previousMaxPrice;
-    // private decimal? _previousMinChgPct;
-    // private long? _previousMinVolume;
+    // Track symbols waiting for initial tick data (for MinChgPct filter)
+    private HashSet<string>? _pendingInitialTicks;
 
     // UI batching for ultra-smooth updates (60 FPS)
     private readonly ConcurrentQueue<TickData> _batchedTicks = new();
     private readonly System.Timers.Timer _batchTimer;
     private readonly Dictionary<string, ScannerRowViewModel> _rowLookup = new();
     private bool _uiReady = false;
-    
+
     private const int BatchIntervalMs = 16; // ~60 FPS for smooth updates
     private const int MaxBatchSize = 50;
+
+    // ============================================================================
+    // DATA ARCHITECTURE
+    // ============================================================================
+    // Snapshot: Immutable baseline from IBKR scan (ScannerRowViewModel[])
+    //   - Replaced only when ScanFilters change (price, exchange, topN)
+    //   - Updated in-place by live ticks (ChangePercent recalculated)
+    //   - Source of truth for filtering
+    //
+    // ScannerItems (ShownData): Filtered/sorted view bound to UI
+    //   - Derived from: Snapshot + ViewFilters
+    //   - Updated instantly when ViewFilters change (MinChgPct, MinVolume)
+    //   - ObservableCollection bound to CollectionView
+    //
+    // FILTER BUCKETS
+    // ============================================================================
+    // ScanFilters (trigger IBKR rescan):
+    //   - MinPrice, MaxPrice, Exchange, TopN
+    //   - Requires IBKR API call → replaces Snapshot
+    //
+    // ViewFilters (instant client-side):
+    //   - MinChgPct (% change threshold), MinVolume
+    //   - No IBKR call → derives ShownData from Snapshot
+    // ============================================================================
+
+    private ScannerRowViewModel[] _snapshot = Array.Empty<ScannerRowViewModel>();
 
     [ObservableProperty] private ObservableCollection<ScannerRowViewModel> _scannerItems = new();
     [ObservableProperty] private string _debugStatus = "";
@@ -59,20 +87,45 @@ public partial class ScannerViewModel : ObservableObject
         [ObservableProperty] private bool _autoRefreshEnabled = false;
         [ObservableProperty] private int _refreshIntervalSeconds = 60; // default 60
 
+    // View switching properties
+    [ObservableProperty] private bool _isInScannerView = true;
+    [ObservableProperty] private bool _isInWatchlistView = false;
+
+    // Computed property for filter panel visibility
+    public bool ShowFiltersPanel => IsInScannerView;
+
+    // Expose watchlist ViewModel for binding
+    public WatchlistViewModel? WatchlistViewModel => _watchlistViewModel;
+
+    // Property changed handler for view switching
+    partial void OnIsInWatchlistViewChanged(bool value)
+    {
+        _logger.LogInformation("IsInWatchlistView changed to: {Value}, WatchlistViewModel is null: {IsNull}", 
+            value, _watchlistViewModel == null);
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+    }
+
+    partial void OnIsInScannerViewChanged(bool value)
+    {
+        _logger.LogInformation("IsInScannerView changed to: {Value}", value);
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+    }
+
     // Options for pickers
 
     public List<string> ExchangeOptions { get; } = new() { "us stocks", "nasdaq", "nyse", "amex", "otc" };
     public List<int> TopNOptions { get; } = new() { 5, 10, 15, 20, 50 };
 
-        private readonly Debounce _debounce = new(TimeSpan.FromMilliseconds(50)); // very responsive for production use
+    private readonly Debounce _debounce = new(TimeSpan.FromMilliseconds(50)); // very responsive for production use
+    private readonly Debounce _priceDebouncer = new(TimeSpan.FromMilliseconds(800)); // longer delay for price to prevent rescans on each keystroke
         
         // Auto-refresh timer fields
         private CancellationTokenSource? _autoCts;
         private Task? _autoTask;
 
-        // Property change handlers - all use debounced filtering
+    // Property change handlers - all use debounced filtering
         partial void OnMinChangePercentTextChanged(string value) => DebouncedApply();
-        partial void OnVolumeMinTextChanged(string value) => DebouncedApply();
+    partial void OnVolumeMinTextChanged(string value) => DebouncedApply();
         
         // Auto-refresh property change handlers
         partial void OnRefreshIntervalSecondsChanged(int oldValue, int newValue)
@@ -89,18 +142,19 @@ public partial class ScannerViewModel : ObservableObject
             if (newValue) 
                 RestartAutoRefreshTimerIfNeeded();
             else 
-            {
-                // Stop auto-refresh immediately (synchronous cancellation)
-                try { _autoCts?.Cancel(); } catch { }
-                _autoTask = null;  // Don't wait for task, just null it
-            }
+        {
+            // Stop auto-refresh immediately (synchronous cancellation)
+            try { _autoCts?.Cancel(); } catch { }
+            _autoTask = null;  // Don't wait for task, just null it
         }
+    }
 
-    public ScannerViewModel(IScanner scanner, IDispatcherService dispatcher, ILogger<ScannerViewModel> logger)
+    public ScannerViewModel(IScanner scanner, IDispatcherService dispatcher, ILogger<ScannerViewModel> logger, IWatchlistService watchlistService)
     {
         _scanner = scanner;
         _dispatcher = dispatcher;
         _logger = logger;
+        _watchlistService = watchlistService;
 
         // Setup batch timer for ultra-smooth updates (60 FPS) FIRST
         _batchTimer = new System.Timers.Timer(BatchIntervalMs);
@@ -131,8 +185,13 @@ public partial class ScannerViewModel : ObservableObject
 
                 }
             }
-            
-                if (e.PropertyName?.StartsWith("Min") == true || 
+
+            // Use longer debounce for price changes to prevent IBKR rescans on each keystroke
+            if (e.PropertyName == nameof(MinPriceText) || e.PropertyName == nameof(MaxPriceText))
+            {
+                _ = _priceDebouncer.ExecuteAsync(ApplyFiltersAsync);
+            }
+            else if (e.PropertyName?.StartsWith("Min") == true ||
                     e.PropertyName?.StartsWith("Max") == true ||
                     e.PropertyName?.StartsWith("Selected") == true ||
                     e.PropertyName?.StartsWith("TopN") == true ||
@@ -159,13 +218,7 @@ public partial class ScannerViewModel : ObservableObject
         VolumeMinText = "100000";
         TopN = 50;
         MinChangePercentText = "";  // No default change% filter
-        
-        // DISABLED: Auto-refresh on loosening
-        // _previousMinPrice = 2;
-        // _previousMaxPrice = 20;
-        // _previousMinVolume = 100000;
-        // _previousMinChgPct = null;
-        
+
         _logger.LogInformation("Set production defaults: Price={MinPrice}-{MaxPrice}, Volume={VolumeMin}, TopN={TopN}",
             MinPriceText, MaxPriceText, VolumeMinText, TopN);
     }
@@ -178,7 +231,7 @@ public partial class ScannerViewModel : ObservableObject
         MaxPriceText = "20";
         VolumeMinText = "100000";
         TopN = 50;
-        
+
         _logger.LogInformation("Filters reset to production defaults");
     }
 
@@ -187,10 +240,24 @@ public partial class ScannerViewModel : ObservableObject
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        if (IsRefreshing || IsLoading) return;
+        if (IsRefreshing || IsLoading || _disposed) return;
         
+        try
+        {
         _cts?.Cancel();
+            _cts?.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already disposed, ignore
+        }
+
         _cts = new CancellationTokenSource();
+
+        // Clear state from previous scan to prevent data leakage
+        _rowLookup.Clear();
+        while (_batchedTicks.TryDequeue(out _)) { } // Clear queued ticks
+        _snapshot = Array.Empty<ScannerRowViewModel>(); // Clear snapshot
 
         try
         {
@@ -200,30 +267,29 @@ public partial class ScannerViewModel : ObservableObject
             
             // Start batch timer now that we're refreshing (UI should be ready)
             StartBatchTimer();
-            
+
             _logger.LogInformation("Starting data refresh...");
-            
+
             // Get current scan-level filter values
             var minPrice = ParseDecimalSafe(MinPriceText) ?? 2;
             var maxPrice = ParseDecimalSafe(MaxPriceText) ?? 20;
-            const string region = "us";  // Always US
             const string product = "stocks";  // Always stocks
             var exchange = IsAnyValue(Exchange) ? "us stocks" : Exchange.ToLowerInvariant();
-            
+
             // Get fresh data using the scanner service with dynamic parameters
             // Cast to concrete type to access overloaded ScanAsync method
-            var rows = _scanner is IbkrGatewayService ibkrGateway 
-                ? await ibkrGateway.ScanAsync(minPrice, maxPrice, region, product, exchange, TopN, _cts.Token)
+            var rows = _scanner is IbkrGatewayService ibkrGateway
+                ? await ibkrGateway.ScanAsync(minPrice, maxPrice, product, exchange, TopN, _cts.Token)
                 : await _scanner.ScanAsync(_cts.Token);
-            
+
             _logger.LogInformation("Received {Count} rows from scanner", rows.Count);
-            
+
             // Clear existing rows and rebuild from scanner results
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 ScannerItems.Clear();
                 _rowLookup.Clear();
-                
+
                 foreach (var row in rows)
                 {
                     var rowVm = new ScannerRowViewModel
@@ -239,16 +305,28 @@ public partial class ScannerViewModel : ObservableObject
                         AvgVolume = (long)row.AvgVolume
                     };
                     // RelativeVolume is auto-calculated in ScannerRowViewModel
-                    
                     _rowLookup[row.Symbol] = rowVm;
                     ScannerItems.Add(rowVm);
                 }
-                
+
                 _logger.LogInformation("Created {Count} ScannerRowViewModel instances", ScannerItems.Count);
+
+                // Store as immutable snapshot (baseline for filtering)
+                _snapshot = ScannerItems.ToArray();
             });
-            
-            // Re-apply client-side filters (TopN, MinChangePercent, Volume)
+
+        // Re-apply client-side filters (TopN, MinChangePercent, Volume)
+        // If MinChgPct filter is active, wait for all symbols to receive initial tick data
+        if (!string.IsNullOrWhiteSpace(MinChangePercentText))
+        {
+            _pendingInitialTicks = new HashSet<string>(rows.Select(r => r.Symbol));
+            _logger.LogInformation("MinChgPct filter active - waiting for {Count} symbols to receive initial tick data", _pendingInitialTicks.Count);
+        }
+        else
+        {
+            // No MinChgPct filter - apply other filters immediately
             await ApplyFiltersAsync();
+        }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -260,7 +338,7 @@ public partial class ScannerViewModel : ObservableObject
         finally 
         { 
             IsRefreshing = false;
-            DebugStatus = $"ScannerItems: {ScannerItems.Count}"; 
+            DebugStatus = $"ScannerItems: {ScannerItems.Count}";
             _logger.LogInformation("RefreshAsync completed: ScannerItems={ScannerItemsCount}", ScannerItems.Count);
         }
     }
@@ -275,7 +353,7 @@ public partial class ScannerViewModel : ObservableObject
             {
                 var processedCount = 0;
                 var updatedSymbols = new HashSet<string>();
-                
+
                 while (_batchedTicks.TryDequeue(out var tick) && processedCount < MaxBatchSize)
                 {
                     var rowVm = GetOrCreateRow(tick.Symbol);
@@ -283,8 +361,23 @@ public partial class ScannerViewModel : ObservableObject
                     // RelativeVolume is auto-calculated in ScannerRowViewModel
                     updatedSymbols.Add(tick.Symbol);
                     processedCount++;
+
+                    // Check if this completes initial tick loading for MinChgPct filter
+                    if (_pendingInitialTicks != null && rowVm.PrevClose > 0 && _pendingInitialTicks.Remove(tick.Symbol))
+                    {
+                        if (_pendingInitialTicks.Count == 0)
+                        {
+                            _logger.LogInformation("All {Total} initial ticks received, applying MinChgPct filter", ScannerItems.Count);
+                            _pendingInitialTicks = null;
+                            _ = Task.Run(async () => await ApplyFiltersAsync());
+                        }
+                        else if (_pendingInitialTicks.Count % 10 == 0)
+                        {
+                            _logger.LogDebug("Waiting for {Pending} more ticks", _pendingInitialTicks.Count);
+                        }
+                    }
                 }
-                
+
                 if (processedCount > 0)
                 {
                     DebugStatus = $"Updated {updatedSymbols.Count} symbols ({processedCount} ticks)";
@@ -305,7 +398,7 @@ public partial class ScannerViewModel : ObservableObject
             _logger.LogError("Batch timer is null - cannot start");
             return;
         }
-        
+
         if (!_batchTimer.Enabled)
         {
             _uiReady = true;
@@ -345,10 +438,9 @@ public partial class ScannerViewModel : ObservableObject
     private static decimal? ParsePercentSafe(string? s) => Parsing.ParsePercent(s);
 
     /// <summary>
-    /// Determines if the current filter changes require a re-scan at IBKR level.
-    /// Re-scan triggers: price range, exchange, TopN changes.
-    /// Client-side only: volume, MinChgPct (with smart auto-refresh on loosening).
-    /// Note: Price changes always trigger re-scan (not subject to loosening logic).
+    /// Determines if current filter changes require IBKR rescan (ScanFilters).
+    /// ScanFilters: price range, exchange, TopN → Replace Snapshot
+    /// ViewFilters: MinChgPct, volume → Derive ShownData from Snapshot
     /// </summary>
     private bool RequiresRescan()
     {
@@ -358,6 +450,7 @@ public partial class ScannerViewModel : ObservableObject
         const string currentProduct = "stocks";  // Always stocks
         var currentExchange = IsAnyValue(Exchange) ? "us stocks" : Exchange.ToLowerInvariant();
         var currentTopN = TopN;
+        // MinChgPct removed - it's client-side only, no re-scan needed
 
         var currentScanFilters = (currentMinPrice, currentMaxPrice, currentRegion, currentProduct, currentExchange, currentTopN);
 
@@ -370,10 +463,10 @@ public partial class ScannerViewModel : ObservableObject
 
         // Check if scan-level filters changed
         var requiresRescan = _previousScanFilters.Value != currentScanFilters;
-        
+
         if (requiresRescan)
         {
-            _logger.LogInformation("Scan-level filters changed: {Previous} -> {Current}, triggering re-scan", 
+            _logger.LogInformation("Scan-level filters changed: {Previous} -> {Current}, triggering re-scan",
                 _previousScanFilters.Value, currentScanFilters);
             _previousScanFilters = currentScanFilters;
         }
@@ -381,67 +474,15 @@ public partial class ScannerViewModel : ObservableObject
         return requiresRescan;
     }
 
-    // DISABLED: Auto-refresh on loosening (client-side filtering only for now)
-    // /// <summary>
-    // /// Checks if filter changes require auto-refresh (filter loosened).
-    // /// Loosening = expanding the range (more permissive filter).
-    // /// </summary>
-    // private bool IsFilterLoosened()
-    // {
-    //     var currentMinPrice = ParseDecimalSafe(MinPriceText) ?? 2;
-    //     var currentMaxPrice = ParseDecimalSafe(MaxPriceText) ?? 20;
-    //     var currentMinChgPct = ParsePercentSafe(MinChangePercentText);
-    //     var currentMinVolume = ParseDecimalSafe(VolumeMinText) != null ? (long)ParseDecimalSafe(VolumeMinText)!.Value : (long?)null;
-    //
-    //     bool loosened = false;
-    //
-    //     // Price range loosened: MinPrice decreased OR MaxPrice increased
-    //     if (_previousMinPrice.HasValue && currentMinPrice < _previousMinPrice.Value)
-    //     {
-    //         _logger.LogInformation("MinPrice loosened from ${Old} to ${New}, triggering auto-refresh", _previousMinPrice.Value, currentMinPrice);
-    //         loosened = true;
-    //     }
-    //     if (_previousMaxPrice.HasValue && currentMaxPrice > _previousMaxPrice.Value)
-    //     {
-    //         _logger.LogInformation("MaxPrice loosened from ${Old} to ${New}, triggering auto-refresh", _previousMaxPrice.Value, currentMaxPrice);
-    //         loosened = true;
-    //     }
-    //
-    //     // MinChgPct loosened: decreased (e.g., 25% → 22%)
-    //     if (_previousMinChgPct.HasValue && currentMinChgPct.HasValue && currentMinChgPct.Value < _previousMinChgPct.Value)
-    //     {
-    //         _logger.LogInformation("MinChgPct loosened from {Old}% to {New}%, triggering auto-refresh", _previousMinChgPct.Value, currentMinChgPct.Value);
-    //         loosened = true;
-    //     }
-    //
-    //     // MinVolume loosened: decreased (e.g., 200k → 100k)
-    //     if (_previousMinVolume.HasValue && currentMinVolume.HasValue && currentMinVolume.Value < _previousMinVolume.Value)
-    //     {
-    //         _logger.LogInformation("MinVolume loosened from {Old:N0} to {New:N0}, triggering auto-refresh", _previousMinVolume.Value, currentMinVolume.Value);
-    //         loosened = true;
-    //     }
-    //
-    //     // Update tracked values
-    //     _previousMinPrice = currentMinPrice;
-    //     _previousMaxPrice = currentMaxPrice;
-    //     _previousMinChgPct = currentMinChgPct;
-    //     _previousMinVolume = currentMinVolume;
-    //
-    //     return loosened;
-    // }
-
+    /// <summary>
+    /// Applies ViewFilters to Snapshot and updates ShownData (ScannerItems).
+    /// Always filters from Snapshot (not from filtered results) to support
+    /// both tightening (10%→15%) and loosening (15%→10%) of filters.
+    /// </summary>
     private async Task ApplyFiltersAsync()
     {
         if (_disposed) return;
-        
-        // DISABLED: Auto-refresh on loosening (user requested client-side filtering only)
-        // if (IsFilterLoosened())
-        // {
-        //     _logger.LogInformation("Filter loosened detected after debounce, triggering refresh");
-        //     await RefreshAsync();
-        //     return; // RefreshAsync will call ApplyFiltersAsync again after loading data
-        // }
-        
+
         // Check if we need to re-scan at IBKR level
         if (RequiresRescan())
         {
@@ -451,7 +492,7 @@ public partial class ScannerViewModel : ObservableObject
         }
 
         // If no items, skip client-side filtering
-        if (ScannerItems.Count == 0) 
+        if (ScannerItems.Count == 0)
         {
             _logger.LogInformation("ApplyFiltersAsync skipped - no items to filter");
             return;
@@ -476,8 +517,18 @@ public partial class ScannerViewModel : ObservableObject
         _logger.LogInformation("Filter criteria: MinPrice={MinPrice}, MaxPrice={MaxPrice}, MinVolume={MinVolume}, MinChgPct={MinChgPct}, TopN={TopN}",
             criteria.MinPrice, criteria.MaxPrice, criteria.MinVolume, criteria.MinChgPct, criteria.TopN);
 
-        var rows = ScannerItems.ToArray(); // copy to array for fast indexer
-        
+        // Always derive ShownData from Snapshot (not from filtered results)
+        // This allows loosening filters (15% → 10%) to show previously hidden stocks
+        var rows = _snapshot.Length > 0 ? _snapshot : ScannerItems.ToArray();
+
+        // Log all snapshot data with ChangePercent values
+        _logger.LogInformation("=== SNAPSHOT DATA ({Count} stocks) ===", rows.Length);
+        foreach (var row in rows.OrderByDescending(r => r.ChangePercent))
+        {
+            _logger.LogInformation("  {Symbol}: Price=${Price:F2}, Change={Change:F2}%, Volume={Volume:N0}",
+                row.Symbol, row.LastPrice, row.ChangePercent, row.Volume);
+        }
+
         // Cancel previous filter operation and create new one
         try
         {
@@ -494,15 +545,24 @@ public partial class ScannerViewModel : ObservableObject
         // Check if cancelled before expensive operation
         if (_filterCts?.IsCancellationRequested == true) return;
 
-        var result = await Task.Run(() => FilterEngine.Apply(rows, criteria), token);
+        var result = await Task.Run(() => FilterEngine.Apply(rows, criteria, _logger), token);
 
-        if (epoch != _applyEpoch) 
+        if (epoch != _applyEpoch)
         {
             _logger.LogInformation("ApplyFiltersAsync cancelled - stale compute");
             return; // stale compute – ignore
         }
 
         _logger.LogInformation("FilterEngine.Apply returned {FilteredCount} of {TotalCount} items", result.TopIndices.Length, rows.Length);
+
+        // Log filtered results
+        _logger.LogInformation("=== FILTERED RESULTS ({Count} stocks passed) ===", result.TopIndices.Length);
+        foreach (var i in result.TopIndices.OrderByDescending(idx => rows[idx].ChangePercent))
+        {
+            var row = rows[i];
+            _logger.LogInformation("  {Symbol}: Price=${Price:F2}, Change={Change:F2}%, Volume={Volume:N0}",
+                row.Symbol, row.LastPrice, row.ChangePercent, row.Volume);
+        }
 
         // Marshal to UI thread once with the FILTERED set
         await MainThread.InvokeOnMainThreadAsync(() =>
@@ -536,6 +596,15 @@ public partial class ScannerViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Set page title for dynamic watchlist naming
+    /// </summary>
+    public void SetPageTitle(string title)
+    {
+        PageTitle = title;
+        _logger.LogDebug("Page title set to: {Title}", title);
+    }
+
         /// <summary>
         /// Load refresh preferences from storage
         /// </summary>
@@ -564,19 +633,19 @@ public partial class ScannerViewModel : ObservableObject
         /// </summary>
         public async Task StopAutoRefreshAsync()
         {
-            try 
-            { 
-                _autoCts?.Cancel(); 
-                _autoCts?.Dispose();
-                _autoCts = null;
-            } 
-            catch { }
-            
+        try
+        {
+            _autoCts?.Cancel();
+            _autoCts?.Dispose();
+            _autoCts = null;
+        }
+        catch { }
+
             if (_autoTask != null)
             {
                 try { await _autoTask; } catch { }
             _autoTask = null;
-            }
+        }
         }
 
         /// <summary>
@@ -589,12 +658,12 @@ public partial class ScannerViewModel : ObservableObject
                 await StopAutoRefreshAsync();
                 if (!AutoRefreshEnabled) return;
 
-                var cts = new CancellationTokenSource();
-                var token = cts.Token;  // Capture token BEFORE assigning to field
-                _autoCts = cts;  // Now assign to field
-                
-                // Use captured token (safe even if cts gets disposed)
-                _autoTask = Task.Run(() => RunAutoRefreshLoopAsync(token));
+            var cts = new CancellationTokenSource();
+            var token = cts.Token;  // Capture token BEFORE assigning to field
+            _autoCts = cts;  // Now assign to field
+
+            // Use captured token (safe even if cts gets disposed)
+            _autoTask = Task.Run(() => RunAutoRefreshLoopAsync(token));
             });
         }
 
@@ -634,13 +703,13 @@ public partial class ScannerViewModel : ObservableObject
         public IRelayCommand ResetFiltersCommand => _resetFiltersCommand ??=
             new RelayCommand(async () =>
             {
-        
-                Exchange = "us stocks";
-                MinPriceText = "2";
-                MaxPriceText = "20";
-                VolumeMinText = "100000";
+
+            Exchange = "us stocks";
+            MinPriceText = "2";
+            MaxPriceText = "20";
+            VolumeMinText = "100000";
                 MinChangePercentText = "";
-                TopN = 50;
+            TopN = 50;
 
                 await ApplyFiltersAsync();
 
@@ -648,27 +717,205 @@ public partial class ScannerViewModel : ObservableObject
                 await StopAutoRefreshAsync();
             });
 
-        public void Dispose()
+    /// <summary>
+    /// Switches to the scanner view.
+    /// </summary>
+    [RelayCommand]
+    private void SwitchToScanner()
+    {
+        IsInScannerView = true;
+        IsInWatchlistView = false;
+        PageTitle = "Market Scanner";
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+        _logger.LogInformation("Switched to Scanner view");
+    }
+
+    /// <summary>
+    /// Switches to the watchlist view.
+    /// </summary>
+    [RelayCommand]
+    private void SwitchToWatchlist()
+    {
+        _logger.LogDebug("SwitchToWatchlist called, _watchlistViewModel is null: {IsNull}", _watchlistViewModel == null);
+        
+        // Initialize watchlist ViewModel BEFORE switching to ensure it exists
+        if (_watchlistViewModel == null)
         {
+            _logger.LogDebug("Creating WatchlistViewModel...");
+            InitializeWatchlistView();
+            _logger.LogDebug("WatchlistViewModel created");
+        }
+
+        _logger.LogDebug("Setting IsInScannerView = false");
+        IsInScannerView = false;
+        _logger.LogDebug("IsInScannerView set to false");
+        
+        _logger.LogDebug("Setting IsInWatchlistView = true");
+        IsInWatchlistView = true;
+        _logger.LogDebug("IsInWatchlistView set to true");
+        
+        PageTitle = "Watchlists";
+        
+        _logger.LogDebug("Calling OnPropertyChanged for ShowFiltersPanel");
+        OnPropertyChanged(nameof(ShowFiltersPanel));
+
+        _logger.LogInformation("Switched to Watchlist view");
+    }
+
+    /// <summary>
+    /// Initializes the watchlist ViewModel on-demand.
+    /// </summary>
+    private void InitializeWatchlistView()
+    {
+        if (_watchlistViewModel != null) return;
+
+        _logger.LogDebug("Creating WatchlistViewModel on UI thread");
+
+        // ✅ Create ViewModel synchronously on UI thread (ready for binding)
+        _watchlistViewModel = new WatchlistViewModel(
+            _watchlistService,
+            (IbkrGatewayService)_scanner,
+            _dispatcher,
+            Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole())
+                .CreateLogger<WatchlistViewModel>());
+
+        _logger.LogDebug("WatchlistViewModel created, notifying property change");
+        OnPropertyChanged(nameof(WatchlistViewModel));
+
+        // ✅ Initialize database async (fire-and-forget, no Task.Run wrapper)
+        _ = _watchlistViewModel.InitializeAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                _logger.LogError(t.Exception, "Failed to initialize watchlist database");
+            }
+            else
+            {
+                _logger.LogDebug("WatchlistViewModel database initialized successfully");
+            }
+        }, TaskScheduler.Default);
+
+        _logger.LogInformation("Watchlist view initialized, database loading in background");
+    }
+
+    /// <summary>
+    /// Generate next available watchlist name using page title
+    /// </summary>
+    private async Task<string> GenerateWatchlistNameAsync()
+    {
+        await _watchlistService.InitializeAsync();
+        var watchlists = await _watchlistService.GetAllWatchlistsAsync();
+        
+        var baseName = PageTitle; // Uses page Title dynamically!
+        var existingNames = watchlists.Select(w => w.Name).ToHashSet();
+        var number = 1;
+        string newName;
+        
+        do
+        {
+            newName = $"{baseName} {number}";
+            number++;
+        } while (existingNames.Contains(newName));
+        
+        return newName;
+    }
+
+    [RelayCommand]
+    private async Task AddToWatchlistAsync(ScannerRowViewModel clickedRow)
+    {
+        try
+        {
+            // Get ALL visible stocks with their company names
+            var symbolsToAdd = ScannerItems.Select(r => (r.Symbol, r.Company)).ToList();
+            
+            _logger.LogInformation("User double-clicked {Symbol}, adding ALL {Count} visible symbols to watchlist",
+                clickedRow.Symbol, symbolsToAdd.Count);
+
+            // Generate watchlist name using page title
+            var newName = await GenerateWatchlistNameAsync();
+
+            // Create watchlist with auto-generated name
+            var newWatchlist = await _watchlistService.CreateWatchlistAsync(newName);
+            
+            // Add all visible stocks with company names
+            await _watchlistService.AddItemsAsync(newWatchlist.Id, symbolsToAdd);
+
+            _logger.LogInformation("Created watchlist '{Name}' with {Count} symbols",
+                newName, symbolsToAdd.Count);
+
+            // TODO: Show toast notification to user
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add to watchlist");
+        }
+    }
+
+        public void Dispose()
+    {
         _disposed = true;
-        
+        _snapshot = Array.Empty<ScannerRowViewModel>();
+
+        // Dispose with exception handling to prevent ObjectDisposedException
+        try
+        {
             _cts?.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
             _cts?.Dispose();
-        
+        }
+        catch (ObjectDisposedException) { }
+
         // Ensure proper disposal order for filter CTS
-        _filterCts?.Cancel();
-        Task.Delay(50).Wait();  // Give pending operations time to cancel
-        _filterCts?.Dispose();
+        try
+        {
+            _filterCts?.Cancel();
+            Task.Delay(50).Wait();  // Give pending operations time to cancel
+        }
+        catch (ObjectDisposedException) { }
         
+        try
+        {
+            _filterCts?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+
         // Stop batch timer
-        _batchTimer?.Stop();
-        _batchTimer?.Dispose();
-        
+        try
+        {
+            _batchTimer?.Stop();
+            _batchTimer?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+
+        try
+        {
             _ = StopAutoRefreshAsync();
-            _autoCts?.Dispose();
-            _debounce.Dispose();
+        }
+        catch (ObjectDisposedException) { }
         
+        try
+        {
+            _autoCts?.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _debounce.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+        
+        try
+        {
+            _priceDebouncer.Dispose();
+        }
+        catch (ObjectDisposedException) { }
+
         // Stop scanner
         _ = Task.Run(async () => await _scanner.StopAsync());
-        }
+    }
 }
