@@ -28,6 +28,12 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isCreatingWatchlist = false;
     [ObservableProperty] private string _newWatchlistName = "";
     [ObservableProperty] private string _watchlistNameError = "";
+    
+    // Inline watchlist rename popup
+    [ObservableProperty] private bool _isRenamingWatchlist = false;
+    [ObservableProperty] private int? _renamingWatchlistId = null;
+    [ObservableProperty] private string _renamingWatchlistName = "";
+    [ObservableProperty] private string _renamingWatchlistError = "";
 
     private readonly Dictionary<string, ScannerRowViewModel> _rowCache = new();
     private readonly ConcurrentQueue<TickData> _batchedTicks = new();
@@ -277,10 +283,130 @@ public partial class WatchlistViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task RenameWatchlistAsync(Watchlist watchlist)
     {
-        // TODO: Implement with input dialog later
-        _logger.LogInformation("Rename functionality not yet implemented for watchlist {Name}", watchlist.Name);
-        // Future: Show input dialog, get new name, call _watchlistService.RenameWatchlistAsync()
-        await Task.CompletedTask;
+        try
+        {
+            // Set up rename popup with current name pre-filled
+            RenamingWatchlistId = watchlist.Id;
+            RenamingWatchlistName = watchlist.Name;
+            RenamingWatchlistError = "";
+            IsRenamingWatchlist = true;
+            
+            await Task.CompletedTask; // Keep async signature
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to show watchlist rename popup");
+            RenamingWatchlistError = $"Error: {ex.Message}";
+        }
+    }
+    
+    [RelayCommand]
+    private async Task ConfirmRenameWatchlistAsync()
+    {
+        try
+        {
+            if (!RenamingWatchlistId.HasValue)
+            {
+                RenamingWatchlistError = "No watchlist selected for rename";
+                return;
+            }
+            
+            // Validate name
+            var trimmedName = RenamingWatchlistName?.Trim() ?? "";
+            
+            // Validation: Empty or whitespace
+            if (string.IsNullOrWhiteSpace(trimmedName))
+            {
+                RenamingWatchlistError = "Name cannot be empty";
+                _logger.LogDebug("Watchlist rename failed - empty name");
+                return;
+            }
+            
+            // Validation: Length (max 100 chars per database schema)
+            if (trimmedName.Length > 100)
+            {
+                RenamingWatchlistError = "Name too long (max 100 characters)";
+                _logger.LogDebug("Watchlist rename failed - name too long");
+                return;
+            }
+            
+            // Validation: Duplicate name (excluding current watchlist)
+            if (Watchlists.Any(w => w.Id != RenamingWatchlistId.Value && w.Name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase)))
+            {
+                RenamingWatchlistError = "Name already exists";
+                _logger.LogDebug("Watchlist rename failed - duplicate name");
+                return;
+            }
+            
+            // Validation: Invalid characters (prevent special chars that might break UI/DB)
+            var invalidChars = new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' };
+            if (trimmedName.Any(c => invalidChars.Contains(c)))
+            {
+                RenamingWatchlistError = "Name contains invalid characters";
+                _logger.LogDebug("Watchlist rename failed - invalid characters");
+                return;
+            }
+
+            // All validations passed - rename watchlist
+            var success = await _watchlistService.RenameWatchlistAsync(RenamingWatchlistId.Value, trimmedName);
+            if (!success)
+            {
+                RenamingWatchlistError = "Failed to rename watchlist";
+                _logger.LogWarning("RenameWatchlistAsync returned false for watchlist {Id}", RenamingWatchlistId.Value);
+                return;
+            }
+            
+            // Update watchlist in collection
+            var watchlist = Watchlists.FirstOrDefault(w => w.Id == RenamingWatchlistId.Value);
+            if (watchlist != null)
+            {
+                var wasSelected = SelectedWatchlist?.Id == watchlist.Id;
+                
+                // Update properties
+                watchlist.Name = trimmedName;
+                watchlist.UpdatedAt = DateTime.UtcNow;
+                
+                // Trigger collection update by removing and re-adding (ensures UI refresh)
+                var index = Watchlists.IndexOf(watchlist);
+                Watchlists.RemoveAt(index);
+                Watchlists.Insert(index, watchlist);
+                
+                // Update SelectedWatchlist reference to ensure UI updates
+                if (wasSelected)
+                {
+                    SelectedWatchlist = watchlist;
+                }
+            }
+
+            _logger.LogInformation("Renamed watchlist {Id} to '{Name}'", RenamingWatchlistId.Value, trimmedName);
+            
+            // Hide popup and clear state
+            IsRenamingWatchlist = false;
+            RenamingWatchlistId = null;
+            RenamingWatchlistName = "";
+            RenamingWatchlistError = "";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to rename watchlist");
+            RenamingWatchlistError = "Failed to rename watchlist";
+        }
+    }
+    
+    [RelayCommand]
+    private void CancelRenameWatchlist()
+    {
+        IsRenamingWatchlist = false;
+        RenamingWatchlistId = null;
+        RenamingWatchlistName = "";
+        RenamingWatchlistError = "";
+        _logger.LogInformation("Watchlist rename cancelled");
+    }
+    
+    partial void OnRenamingWatchlistNameChanged(string value)
+    {
+        // Clear error when user starts typing
+        RenamingWatchlistError = "";
     }
 
     [RelayCommand]

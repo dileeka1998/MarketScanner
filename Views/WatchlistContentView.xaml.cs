@@ -35,6 +35,20 @@ public partial class WatchlistContentView : ContentView
                                     }
                                 });
                             }
+                            
+                            if (args.PropertyName == nameof(WatchlistViewModel.IsRenamingWatchlist) 
+                                && vm.IsRenamingWatchlist)
+                            {
+                                Dispatcher.Dispatch(() =>
+                                {
+                                    RenamingWatchlistNameEntry?.Focus();
+                                    if (RenamingWatchlistNameEntry != null)
+                                    {
+                                        RenamingWatchlistNameEntry.CursorPosition = 0;
+                                        RenamingWatchlistNameEntry.SelectionLength = RenamingWatchlistNameEntry.Text?.Length ?? 0;
+                                    }
+                                });
+                            }
                         };
                     }
                 }

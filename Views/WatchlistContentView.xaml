@@ -81,13 +81,12 @@
                                         CommandParameter="{Binding .}"/>
                                 </Border.GestureRecognizers>
                                 
-                                <!-- Right-click context menu (Rename - stubbed for now) -->
+                                <!-- Right-click context menu -->
                                 <FlyoutBase.ContextFlyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="Rename (Coming Soon)" 
+                                        <MenuFlyoutItem Text="Rename" 
                                                         Command="{Binding BindingContext.RenameWatchlistCommand, Source={x:Reference WatchlistRoot}}"
-                                                        CommandParameter="{Binding .}"
-                                                        IsEnabled="False"/>
+                                                        CommandParameter="{Binding .}"/>
                                         <MenuFlyoutItem Text="Delete" 
                                                         Command="{Binding BindingContext.DeleteWatchlistCommand, Source={x:Reference WatchlistRoot}}"
                                                         CommandParameter="{Binding .}"/>
@@ -313,6 +312,71 @@
                         <Button Grid.Column="1"
                                 Text="Create"
                                 Command="{Binding ConfirmCreateWatchlistCommand}"
+                                BackgroundColor="{StaticResource PrimaryDark}"
+                                TextColor="{StaticResource TextOnAccent}"
+                                FontSize="12"
+                                HeightRequest="32"/>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+        
+        <!-- Inline Watchlist Rename Input Popup (Floating Overlay) -->
+        <Grid Grid.RowSpan="2"
+              IsVisible="{Binding IsRenamingWatchlist}"
+              BackgroundColor="#80000000"
+              InputTransparent="False"
+              Padding="10">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CancelRenameWatchlistCommand}"/>
+            </Grid.GestureRecognizers>
+            
+            <!-- Popup Box (positioned top-right near + button) -->
+            <Border HorizontalOptions="End"
+                    VerticalOptions="Start"
+                    Margin="0,40,0,0"
+                    Padding="15"
+                    BackgroundColor="{StaticResource SurfaceDark}"
+                    Stroke="{StaticResource PrimaryDark}"
+                    StrokeThickness="2"
+                    WidthRequest="300">
+                
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer/>
+                </Border.GestureRecognizers>
+                
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Rename Watchlist"
+                           FontSize="13"
+                           TextColor="{StaticResource OnSurfaceDark}"
+                           FontAttributes="Bold"/>
+                    
+                    <Entry x:Name="RenamingWatchlistNameEntry"
+                           Text="{Binding RenamingWatchlistName}"
+                           Placeholder="Enter name..."
+                           TextColor="{StaticResource OnSurfaceDark}"
+                           BackgroundColor="{StaticResource BackgroundDark}"
+                           FontSize="13"
+                           ReturnCommand="{Binding ConfirmRenameWatchlistCommand}"/>
+                    
+                    <!-- Error Message -->
+                    <Label Text="{Binding RenamingWatchlistError}"
+                           TextColor="{StaticResource ErrorColor}"
+                           FontSize="11"
+                           IsVisible="{Binding RenamingWatchlistError, Converter={StaticResource StringToBoolConverter}}"/>
+                    
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0"
+                                Text="Cancel"
+                                Command="{Binding CancelRenameWatchlistCommand}"
+                                BackgroundColor="{StaticResource BackgroundDark}"
+                                TextColor="{StaticResource OnSurfaceDark}"
+                                FontSize="12"
+                                HeightRequest="32"/>
+                        
+                        <Button Grid.Column="1"
+                                Text="Rename"
+                                Command="{Binding ConfirmRenameWatchlistCommand}"
                                 BackgroundColor="{StaticResource PrimaryDark}"
                                 TextColor="{StaticResource TextOnAccent}"
                                 FontSize="12"
